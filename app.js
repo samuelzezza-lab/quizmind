@@ -1,11 +1,11 @@
 /* ============================================================
    Quizmind — Logica applicativa
-   Flusso: selezione percorso -> riepilogo esame -> sessione da
+   Flusso: corso di laurea -> anno -> esame -> sessione da
    10 domande -> correzione -> revisione.
-   Nessuna chiamata di rete: tutto gira nel browser dell'utente.
+   Nessuna università specifica: solo corsi di laurea.
    ============================================================ */
 
-import { UNIVERSITIES, PENDING_UNIVERSITIES } from "./data/universities.js";
+import { DEGREES, findDegree, examSlug, catalogStats } from "./data/degrees.js";
 import {
   examCoverage,
   generateSession,
@@ -16,8 +16,9 @@ import {
 
 /* ------------------------- STATO -------------------------- */
 const state = {
+  degree: null,
+  year: null,
   exam: null,
-  path: null,
   session: null,
   answers: [],
   current: 0,
@@ -39,38 +40,14 @@ function el(tag, className, text) {
 
 const LETTERS = ["A", "B", "C", "D", "E"];
 
-/* Slug dell'esame: l'engine è indicizzato per nome logico.
-   Es. "unimi-giurisprudenza-1-diritto-privato" -> "diritto-privato" */
-function examSlug(examId) {
-  const parts = examId.split("-");
-  const last = parts[parts.length - 1];
-  const map = {
-    privato: "diritto-privato",
-    costituzionale: "diritto-costituzionale",
-    programmazione: "programmazione",
-    algoritmi: "algoritmi",
-    "basi-di-dati": "basi-di-dati",
-    "analisi-matematica": "analisi-matematica",
-    "fisica-1": "fisica-1",
-    "fisica-2": "fisica-2",
-    anatomia: "anatomia",
-    istologia: "istologia",
-    chimica: "chimica",
-    statistica: "statistica"
-  };
-  // cerca la chiave più lunga che compare nella coda dell'id
-  const tail = parts.slice(2).join("-");
-  for (const key of Object.keys(map).sort((a, b) => b.length - a.length)) {
-    if (tail.endsWith(key)) return map[key];
-  }
-  return last;
+/* --------------------- CONTATORE LOCALE ------------------- */
+function todayKey() {
+  const d = new Date();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${m}-${day}`;
 }
 
-/* --------------------- CONTATORE LOCALE ------------------- */
-/* NOTA DI TRASPARENZA: questo contatore vive nel localStorage del
-   browser ed è quindi aggirabile da chi lo modifica. Il limite
-   realmente vincolante richiede un backend (Supabase) ed è fuori
-   dallo scope di questa fase. L'interfaccia lo dichiara apertamente. */
 function readUsage() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -83,13 +60,6 @@ function readUsage() {
   }
 }
 
-function todayKey() {
-  const d = new Date();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
-  return `${d.getFullYear()}-${m}-${day}`;
-}
-
 function writeUsage(usage) {
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(usage)); } catch { /* ignorato */ }
 }
@@ -99,8 +69,7 @@ function renderSessionCounter() {
   const left = Math.max(0, FREE_SESSIONS_PER_DAY - usage.count);
   const node = $("#session-counter");
   if (!node) return;
-  node.innerHTML =
-    `Sessioni gratuite oggi: <strong>${left} / ${FREE_SESSIONS_PER_DAY}</strong>`;
+  node.innerHTML = `Sessioni gratuite oggi: <strong>${left} / ${FREE_SESSIONS_PER_DAY}</strong>`;
 }
 
 /* --------------------- SELEZIONE PERCORSO ----------------- */
@@ -117,72 +86,60 @@ function fillSelect(select, items, placeholder) {
   select.disabled = items.length === 0;
 }
 
-function findUniversity(id) { return UNIVERSITIES.find(u => u.id === id); }
-function findDegree(uni, id) { return uni?.degrees.find(d => d.id === id); }
-function findYear(deg, id) { return deg?.years.find(y => y.id === id); }
-
 function initSelectors() {
-  const uniSel = $("#sel-university");
   const degSel = $("#sel-degree");
   const yearSel = $("#sel-year");
   const examSel = $("#sel-exam");
 
-  fillSelect(
-    uniSel,
-    UNIVERSITIES.map(u => ({ value: u.id, label: `${u.name} (${u.city})` })),
-    "Seleziona l'ateneo"
-  );
-  fillSelect(degSel, [], "Seleziona prima l'ateneo");
+  /* Raggruppa i corsi per area disciplinare. */
+  const areas = [...new Set(DEGREES.map(d => d.area))];
+  degSel.innerHTML = "";
+  const ph = el("option", null, "Seleziona il corso di laurea");
+  ph.value = "";
+  degSel.appendChild(ph);
+  for (const area of areas) {
+    const group = document.createElement("optgroup");
+    group.label = area;
+    for (const d of DEGREES.filter(x => x.area === area)) {
+      const o = el("option", null, `${d.name} — ${d.class}`);
+      o.value = d.id;
+      group.appendChild(o);
+    }
+    degSel.appendChild(group);
+  }
+  degSel.disabled = false;
+
   fillSelect(yearSel, [], "Seleziona prima il corso");
   fillSelect(examSel, [], "Seleziona prima l'anno");
 
-  uniSel.addEventListener("change", () => {
-    const uni = findUniversity(uniSel.value);
-    fillSelect(
-      degSel,
-      uni ? uni.degrees.map(d => ({ value: d.id, label: `${d.name} — ${d.class}` })) : [],
-      "Seleziona il corso di laurea"
-    );
-    fillSelect(yearSel, [], "Seleziona prima il corso");
-    fillSelect(examSel, [], "Seleziona prima l'anno");
-    renderExamSummary();
-  });
-
   degSel.addEventListener("change", () => {
-    const uni = findUniversity(uniSel.value);
-    const deg = findDegree(uni, degSel.value);
+    const deg = findDegree(degSel.value);
+    state.degree = deg || null;
     fillSelect(
       yearSel,
-      deg ? deg.years.map(y => ({ value: y.id, label: `${y.year}° anno` })) : [],
+      deg ? deg.years.map(y => ({ value: String(y.year), label: `${y.year}° anno` })) : [],
       "Seleziona l'anno di corso"
     );
     fillSelect(examSel, [], "Seleziona prima l'anno");
+    state.exam = null;
     renderExamSummary();
   });
 
   yearSel.addEventListener("change", () => {
-    const uni = findUniversity(uniSel.value);
-    const deg = findDegree(uni, degSel.value);
-    const yr = findYear(deg, yearSel.value);
+    const deg = state.degree;
+    const y = deg?.years.find(x => String(x.year) === yearSel.value) || null;
+    state.year = y;
     fillSelect(
       examSel,
-      yr ? yr.exams.map(e => ({ value: e.id, label: e.name })) : [],
+      y ? y.exams.map(e => ({ value: e.id, label: `${e.name} (${e.ssd})` })) : [],
       "Seleziona l'esame"
     );
+    state.exam = null;
     renderExamSummary();
   });
 
   examSel.addEventListener("change", () => {
-    const uni = findUniversity(uniSel.value);
-    const deg = findDegree(uni, degSel.value);
-    const yr = findYear(deg, yearSel.value);
-    const exam = yr?.exams.find(e => e.id === examSel.value) || null;
-    state.exam = exam;
-    state.path = uni && deg && yr ? {
-      university: uni.name,
-      degree: `${deg.name} (${deg.class})`,
-      year: `${yr.year}° anno`
-    } : null;
+    state.exam = state.year?.exams.find(e => e.id === examSel.value) || null;
     renderExamSummary();
   });
 }
@@ -196,7 +153,7 @@ function renderExamSummary() {
   if (!state.exam) {
     box.className = "empty";
     box.appendChild(el("p", "empty__title", "Nessun esame selezionato"));
-    box.appendChild(el("p", null, "Completa i quattro menu qui sopra per vedere la copertura del motore."));
+    box.appendChild(el("p", null, "Completa i tre menu qui sopra per vedere la copertura del motore."));
     return;
   }
 
@@ -209,15 +166,11 @@ function renderExamSummary() {
   const left = el("div");
 
   left.appendChild(el("div", "exam-summary__path",
-    `${state.path.university} · ${state.path.degree} · ${state.path.year}`));
+    `${state.degree.name} (${state.degree.class}) · ${state.year.year}° anno · ${state.degree.area}`));
   left.appendChild(el("div", "exam-summary__name", state.exam.name));
 
   const meta = el("div", "exam-summary__meta");
-  const bSsd = el("span", "badge badge--info", state.exam.ssd);
-  meta.appendChild(bSsd);
-  meta.appendChild(el("span",
-    state.exam.verified ? "badge badge--verified" : "badge badge--pending",
-    state.exam.verified ? "Dati ateneo verificati" : "Dati ateneo da verificare"));
+  meta.appendChild(el("span", "badge badge--info", state.exam.ssd));
   meta.appendChild(el("span",
     cov.available ? "badge badge--verified" : "badge badge--pending",
     cov.available ? "Motore pronto" : "Motore in preparazione"));
@@ -226,21 +179,17 @@ function renderExamSummary() {
   const right = el("div");
   const covWrap = el("div", "coverage");
 
-  const item1 = el("div", "coverage__item");
-  item1.appendChild(el("div", "coverage__value num", String(cov.templates)));
-  item1.appendChild(el("div", "coverage__label", "Template attivi"));
-  covWrap.appendChild(item1);
-
-  const item2 = el("div", "coverage__item");
-  item2.appendChild(el("div", "coverage__value num", String(QUESTIONS_PER_SESSION)));
-  item2.appendChild(el("div", "coverage__label", "Domande a sessione"));
-  covWrap.appendChild(item2);
-
-  const item3 = el("div", "coverage__item");
-  item3.appendChild(el("div", "coverage__value num", variants ? variants.toLocaleString("it-IT") : "—"));
-  item3.appendChild(el("div", "coverage__label", "Varianti stimate"));
-  covWrap.appendChild(item3);
-
+  const stats = [
+    [String(cov.templates), "Template attivi"],
+    [String(QUESTIONS_PER_SESSION), "Domande a sessione"],
+    [variants ? variants.toLocaleString("it-IT") : "—", "Varianti stimate"]
+  ];
+  for (const [value, label] of stats) {
+    const item = el("div", "coverage__item");
+    item.appendChild(el("div", "coverage__value num", value));
+    item.appendChild(el("div", "coverage__label", label));
+    covWrap.appendChild(item);
+  }
   right.appendChild(covWrap);
 
   if (!cov.available) {
@@ -260,7 +209,6 @@ function renderExamSummary() {
   if (startBtn) startBtn.disabled = !cov.available;
 }
 
-/* --------------------------- QUIZ ------------------------- */
 function startSession() {
   if (!state.exam) return;
 
@@ -275,7 +223,7 @@ function startSession() {
   const session = generateSession(slug, seed);
 
   if (!session.ok) {
-    alert("Questo esame non dispone ancora di template sufficienti.");
+    renderUnsupportedScreen(slug, session);
     return;
   }
 
@@ -297,14 +245,47 @@ function renderLimitScreen(usage) {
   const panel = el("section", "panel");
   panel.appendChild(el("div", "panel__title", "Limite giornaliero raggiunto"));
   panel.appendChild(el("div", "panel__desc",
-    `Hai utilizzato ${usage.count} sessioni oggi. Il limite di ${FREE_SESSIONS_PER_DAY} sessioni gratuite ` +
-    `si azzera a mezzanotte, ora locale.`));
+    `Hai utilizzato ${usage.count} sessioni oggi. Il limite di ${FREE_SESSIONS_PER_DAY} sessioni ` +
+    `gratuite si azzera a mezzanotte, ora locale.`));
   const n = el("div", "notice notice--warning");
   n.textContent =
     "Nota tecnica: in questa fase il conteggio è memorizzato nel browser e non è quindi " +
     "verificabile lato server. Un limite opponibile richiede autenticazione e database.";
   panel.appendChild(n);
+
+  const row = el("div", "btn-row");
+  const home = el("button", "btn btn--ghost", "Torna alla selezione");
+  home.type = "button";
+  home.addEventListener("click", renderHome);
+  row.appendChild(home);
+  panel.appendChild(row);
+
   view.appendChild(panel);
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function renderUnsupportedScreen(slug, info) {
+  const view = $("#view");
+  view.innerHTML = "";
+  const panel = el("section", "panel");
+  panel.appendChild(el("div", "panel__title", "Esame non ancora coperto dal motore"));
+  panel.appendChild(el("div", "panel__desc",
+    `L'esame «${state.exam.name}» (${state.exam.ssd}) non dispone di template sufficienti.`));
+  const n = el("div", "notice notice--warning");
+  n.textContent =
+    `Template presenti: ${info.coverage ?? 0}. Minimo richiesto: ${info.minRequired ?? 3}. ` +
+    `Il motore non genera domande inventate per riempire la sessione.`;
+  panel.appendChild(n);
+
+  const row = el("div", "btn-row");
+  const home = el("button", "btn btn--ghost", "Torna alla selezione");
+  home.type = "button";
+  home.addEventListener("click", renderHome);
+  row.appendChild(home);
+  panel.appendChild(row);
+
+  view.appendChild(panel);
+  window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 function renderQuestion() {
@@ -317,7 +298,6 @@ function renderQuestion() {
   const main = el("div");
   const side = el("aside", "side-stack");
 
-  /* --- barra di avanzamento --- */
   const prog = el("div", "quiz-progress");
   const bar = el("div", "progress-bar");
   const fill = el("div", "progress-bar__fill");
@@ -332,7 +312,7 @@ function renderQuestion() {
 
   const meta = el("div", "question-card__meta");
   meta.appendChild(el("span", "badge badge--accent", q.topic));
-  meta.appendChild(el("span", "badge badge--info", "10 domande · sessione standard"));
+  meta.appendChild(el("span", "badge badge--info", `${s.total} domande · sessione standard`));
   card.appendChild(meta);
 
   card.appendChild(el("div", "question-card__prompt", q.prompt));
@@ -342,8 +322,7 @@ function renderQuestion() {
   q.options.forEach((text, i) => {
     const btn = el("button", "option");
     btn.type = "button";
-    const key = el("span", "option__key", LETTERS[i]);
-    btn.appendChild(key);
+    btn.appendChild(el("span", "option__key", LETTERS[i]));
     btn.appendChild(el("span", "option__text", text));
     if (state.graded) {
       btn.disabled = true;
@@ -361,20 +340,8 @@ function renderQuestion() {
   });
   card.appendChild(opts);
 
-  /* --- feedback / spiegazione --- */
-  if (state.graded) {
-    const isRight = answered === q.correctIndex;
-    const fb = el("div", `feedback feedback--${isRight ? "correct" : "wrong"}`);
-    const title = el("strong", null, isRight ? "Risposta corretta. " : "Risposta errata. ");
-    fb.appendChild(title);
-    const expl = el("span", null, q.explanation);
-    fb.appendChild(expl);
-    card.appendChild(fb);
-  }
-
   main.appendChild(card);
 
-  /* --- pulsanti --- */
   const row = el("div", "btn-row");
   const back = el("button", "btn btn--ghost", "← Indietro");
   back.type = "button";
@@ -413,7 +380,6 @@ function renderQuestion() {
   main.appendChild(row);
   layout.appendChild(main);
 
-  /* --- sidebar con l'elenco delle domande --- */
   const navPanel = el("div", "side-panel");
   navPanel.appendChild(el("div", "side-panel__title", "Avanzamento"));
   const list = el("ul", "dot-list");
@@ -432,13 +398,13 @@ function renderQuestion() {
   const infoPanel = el("div", "side-panel");
   infoPanel.appendChild(el("div", "side-panel__title", "Sessione"));
   const kv = el("dl", "kv");
-  const rows = [
+  for (const [k, v] of [
     ["Esame", state.exam.name],
-    ["Università", state.path.university],
+    ["Corso", `${state.degree.name} (${state.degree.class})`],
+    ["Anno", `${state.year.year}° anno`],
     ["Domande", String(s.total)],
     ["Template usati", String(s.usedTemplates)]
-  ];
-  for (const [k, v] of rows) {
+  ]) {
     const r = el("div", "kv__row");
     r.appendChild(el("dt", null, k));
     r.appendChild(el("dd", null, v));
@@ -458,7 +424,6 @@ function renderQuestion() {
   view.appendChild(layout);
 }
 
-/* ------------------------- RISULTATI ---------------------- */
 function renderResults() {
   const view = $("#view");
   const s = state.session;
@@ -471,8 +436,7 @@ function renderResults() {
 
   const ring = el("div", "score-ring");
   const pct = r.percentage;
-  const ringColor = pct >= 70 ? "var(--success)" : pct >= 40 ? "var(--warning)" : "var(--danger)";
-  ring.style.borderColor = ringColor;
+  ring.style.borderColor = pct >= 70 ? "var(--success)" : pct >= 40 ? "var(--warning)" : "var(--danger)";
   ring.appendChild(el("div", "score-ring__value", `${r.score}/${r.total}`));
   ring.appendChild(el("div", "score-ring__label", `${pct}% corrette`));
   headInner.appendChild(ring);
@@ -480,15 +444,14 @@ function renderResults() {
   const text = el("div", "result-head__text");
   text.appendChild(el("h2", null, resultHeadline(pct)));
   text.appendChild(el("p", null,
-    `Esame: ${state.exam.name} — ${state.path.university}, ${state.path.year}. ` +
-    `Hai risposto correttamente a ${r.score} domande su ${r.total}.`));
+    `Esame: ${state.exam.name} — ${state.degree.name} (${state.degree.class}), ` +
+    `${state.year.year}° anno. Hai risposto correttamente a ${r.score} domande su ${r.total}.`));
 
   const topicBox = el("div", "exam-summary__meta");
   topicBox.style.marginTop = "0.85rem";
   for (const t of r.byTopic) {
-    const ok = t.correct === t.total;
     topicBox.appendChild(el("span",
-      ok ? "badge badge--verified" : "badge badge--info",
+      t.correct === t.total ? "badge badge--verified" : "badge badge--info",
       `${t.topic}: ${t.correct}/${t.total}`));
   }
   text.appendChild(topicBox);
@@ -497,7 +460,6 @@ function renderResults() {
   head.appendChild(headInner);
   view.appendChild(head);
 
-  /* --- revisione dettagliata --- */
   const review = el("div", "panel");
   review.appendChild(el("div", "panel__title", "Revisione delle risposte"));
   review.appendChild(el("div", "panel__desc",
@@ -539,7 +501,6 @@ function renderResults() {
   review.appendChild(list);
   view.appendChild(review);
 
-  /* --- azioni --- */
   const actions = el("div", "panel");
   const row = el("div", "btn-row");
   row.style.marginTop = "0";
@@ -558,8 +519,7 @@ function renderResults() {
 
   row.appendChild(el("div", "spacer"));
 
-  const usage = readUsage();
-  const left = Math.max(0, FREE_SESSIONS_PER_DAY - usage.count);
+  const left = Math.max(0, FREE_SESSIONS_PER_DAY - readUsage().count);
   row.appendChild(el("span", "quiz-progress__label", `Sessioni gratuite rimaste oggi: ${left}`));
 
   actions.appendChild(row);
@@ -575,7 +535,6 @@ function resultHeadline(pct) {
   return "Preparazione da consolidare";
 }
 
-/* -------------------------- VISTA HOME -------------------- */
 function renderHome() {
   const view = $("#view");
   view.innerHTML = "";
@@ -583,17 +542,15 @@ function renderHome() {
   const panel = el("section", "panel");
   panel.appendChild(el("div", "panel__title", "Seleziona il percorso d'esame"));
   panel.appendChild(el("div", "panel__desc",
-    "Scegli ateneo, corso di laurea, anno di corso ed esame. La sessione generata contiene " +
+    "Scegli corso di laurea, anno di corso ed esame. La sessione generata contiene " +
     `${QUESTIONS_PER_SESSION} domande a risposta multipla con correzione automatica.`));
 
   const grid = el("div", "selector-grid");
-  const fields = [
-    ["sel-university", "Ateneo"],
+  for (const [id, label] of [
     ["sel-degree", "Corso di laurea"],
     ["sel-year", "Anno di corso"],
     ["sel-exam", "Esame"]
-  ];
-  for (const [id, label] of fields) {
+  ]) {
     const f = el("div", "field");
     const lb = el("label", null, label);
     lb.setAttribute("for", id);
@@ -631,7 +588,7 @@ function renderHome() {
   const summary = el("div", "empty");
   summary.id = "exam-summary";
   summary.appendChild(el("p", "empty__title", "Nessun esame selezionato"));
-  summary.appendChild(el("p", null, "Completa i quattro menu qui sopra per vedere la copertura del motore."));
+  summary.appendChild(el("p", null, "Completa i tre menu qui sopra per vedere la copertura del motore."));
   summaryPanel.appendChild(summary);
   view.appendChild(summaryPanel);
 
@@ -639,38 +596,36 @@ function renderHome() {
   renderExamSummary();
 }
 
-/* --------------------- VISTA STRUTTURA -------------------- */
-function renderStructure() {
+function renderCatalog() {
   const view = $("#view");
   view.innerHTML = "";
 
+  const stats = catalogStats();
+
   const panel = el("section", "panel");
-  panel.appendChild(el("div", "panel__title", "Atenei attivi"));
+  panel.appendChild(el("div", "panel__title", "Corsi di laurea"));
   panel.appendChild(el("div", "panel__desc",
-    "Solo gli atenei con struttura verificata sono attivi nel selettore. " +
-    "Gli altri sono elencati come in preparazione, senza dati inventati."));
+    "Catalogo organizzato per classi di laurea ministeriali (DM 270/2004). " +
+    "Nessuna università specifica: i corsi sono comuni a tutti gli atenei."));
 
   const wrap = el("div", "table-wrap");
   const table = el("table");
   const thead = el("thead");
   const hr = el("tr");
-  for (const h of ["Ateneo", "Città", "Corsi", "Anni", "Esami"]) {
+  for (const h of ["Corso di laurea", "Classe", "Area", "Anni", "Esami"]) {
     hr.appendChild(el("th", null, h));
   }
   thead.appendChild(hr);
   table.appendChild(thead);
 
   const tbody = el("tbody");
-  let totDegrees = 0, totYears = 0, totExams = 0;
-  for (const u of UNIVERSITIES) {
-    const years = u.degrees.reduce((a, d) => a + d.years.length, 0);
-    const exams = u.degrees.reduce((a, d) => a + d.years.reduce((b, y) => b + y.exams.length, 0), 0);
-    totDegrees += u.degrees.length; totYears += years; totExams += exams;
+  for (const d of DEGREES) {
+    const exams = d.years.reduce((a, y) => a + y.exams.length, 0);
     const tr = el("tr");
-    tr.appendChild(el("td", null, u.name));
-    tr.appendChild(el("td", null, u.city));
-    tr.appendChild(el("td", "num", String(u.degrees.length)));
-    tr.appendChild(el("td", "num", String(years)));
+    tr.appendChild(el("td", null, d.name));
+    tr.appendChild(el("td", null, d.class));
+    tr.appendChild(el("td", null, d.area));
+    tr.appendChild(el("td", "num", String(d.years.length)));
     tr.appendChild(el("td", "num", String(exams)));
     tbody.appendChild(tr);
   }
@@ -680,37 +635,46 @@ function renderStructure() {
 
   const row = el("div", "btn-row");
   row.appendChild(el("span", "quiz-progress__label",
-    `${UNIVERSITIES.length} atenei attivi · ${totDegrees} corsi · ${totYears} anni · ${totExams} esami`));
+    `${stats.degrees} corsi · ${stats.years} anni di corso · ${stats.exams} esami`));
   panel.appendChild(row);
-
   view.appendChild(panel);
 
-  const pending = el("section", "panel");
-  pending.appendChild(el("div", "panel__title", "Atenei in preparazione"));
-  pending.appendChild(el("div", "panel__desc",
-    `Questi ${PENDING_UNIVERSITIES.length} atenei sono reali e già previsti dalla struttura, ` +
-    "ma corsi e anni non sono ancora stati inseriti. Restano fuori dal selettore " +
-    "finché i dati non vengono verificati e aggiunti in data/universities.js."));
-  const list = el("ul", "dot-list");
-  list.style.columns = "2";
-  list.style.columnGap = "2.5rem";
-  for (const name of PENDING_UNIVERSITIES) {
-    const li = el("li");
-    li.appendChild(el("span", "dot"));
-    li.appendChild(el("span", null, name));
-    list.appendChild(li);
+  const detail = el("section", "panel");
+  detail.appendChild(el("div", "panel__title", "Esami e copertura del motore"));
+  detail.appendChild(el("div", "panel__desc",
+    "Per ogni esame è indicato il settore scientifico-disciplinare e se il motore dispone " +
+    "dei template necessari a generare una sessione completa."));
+
+  const dList = el("div", "review");
+  for (const d of DEGREES) {
+    const item = el("div", "review-item");
+    item.appendChild(el("div", "review-item__prompt", `${d.name} — ${d.class}`));
+    for (const y of d.years) {
+      for (const e of y.exams) {
+        const cov = examCoverage(examSlug(e.id));
+        const line = el("div", "answer-line");
+        line.appendChild(el("span", "answer-line__tag", `${y.year}° anno`));
+        const text = el("span", "answer-line__text");
+        text.textContent = `${e.name} · ${e.ssd}`;
+        line.appendChild(text);
+        line.appendChild(el("span",
+          cov.available ? "badge badge--verified" : "badge badge--pending",
+          cov.available ? `${cov.templates} template` : "in preparazione"));
+        item.appendChild(line);
+      }
+    }
+    dList.appendChild(item);
   }
-  pending.appendChild(list);
-  view.appendChild(pending);
+  detail.appendChild(dList);
+  view.appendChild(detail);
 }
 
-/* ---------------------- NAVIGAZIONE ----------------------- */
 function setRoute(route) {
   for (const a of document.querySelectorAll(".header-nav a[data-route]")) {
     if (a.dataset.route === route) a.setAttribute("aria-current", "page");
     else a.removeAttribute("aria-current");
   }
-  if (route === "struttura") renderStructure();
+  if (route === "catalogo") renderCatalog();
   else renderHome();
 }
 
@@ -732,5 +696,4 @@ function init() {
   setRoute("home");
 }
 
-// Bootstrap già invocato a fine file tramite DOMContentLoaded
 document.addEventListener("DOMContentLoaded", init);
