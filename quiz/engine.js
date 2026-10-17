@@ -1,195 +1,222 @@
+/* ============================================================
+   Quizmind — InstitutionalExamEngine
+   Motore di generazione a tre step obbligatori.
 
-/* ---------------- AREA MEDICA ---------------- */
-EXAM_AREAS["biochimica"] = {
-  name: "Biochimica",
-  areas: [
-    area("enzimi", "Enzimi e cinetica", "definizione", {
-      sets: [{
-        question: "Nella cinetica enzimatica,",
-        items: [
-          { id: "km", label: "la costante Km", text: "la concentrazione di substrato alla quale la velocità di reazione è pari alla metà della velocità massima" },
-          { id: "vmax", label: "la Vmax", text: "la velocità massima raggiunta quando l'enzima è saturato dal substrato" },
-          { id: "kcat", label: "il numero di turnover", text: "il numero di molecole di substrato convertite per unità di tempo da una molecola di enzima saturata" },
-          { id: "competitivo", label: "l'inibitore competitivo", text: "la molecola che si lega al sito attivo aumentando la Km apparente senza modificare la Vmax" }
-        ]
-      }]
-    }),
-    area("metabolismo", "Metabolismo energetico", "calcolo", {
-      compute: function (rng) {
-        const glucosio = randInt(rng, 2, 12);
-        return {
-          prompt: "Considerando una resa di 30 molecole di ATP per molecola di glucosio ossidata completamente, quante moli di ATP si producono da " + glucosio + " moli di glucosio?",
-          value: glucosio * 30, unit: "mol di ATP", factor: 2, decimals: 0,
-          explanation: "Ogni molecola di glucosio rende circa 30 ATP: " + glucosio + " × 30 = " + (glucosio * 30) + " mol.",
-          note: "Errore tipico: usare la sola resa della glicolisi, dimenticando il ciclo di Krebs e la fosforilazione ossidativa."
-        };
-      }
-    }),
-    area("glicolisi", "Glicolisi e gluconeogenesi", "conseguenza", {
-      consequences: [
-        { id: "netto", cause: "una molecola di glucosio è degradata lungo la glicolisi", effect: "si ottengono 2 molecole di piruvato con un guadagno netto di 2 ATP e 2 NADH" },
-        { id: "carenza", cause: "l'apporto di glucosio si riduce drasticamente", effect: "si attivano gluconeogenesi e chetogenesi, con produzione di corpi chetonici dagli acidi grassi" },
-        { id: "pfk", cause: "la fosfofruttochinasi-1 è inibita da elevate concentrazioni di ATP", effect: "la glicolisi rallenta per regolazione a feedback negativo sul flusso glicolitico" },
-        { id: "ossigeno", cause: "l'ossigeno è disponibile in quantità sufficiente", effect: "il piruvato entra nel mitocondrio e viene decarbossilato ad acetil-CoA per il ciclo di Krebs" }
-      ]
-    }),
-    area("lipidi", "Lipidi e beta-ossidazione", "calcolo", {
-      compute: function (rng) {
-        const atomi = randInt(rng, 10, 18);
-        return {
-          prompt: "Quanti cicli di beta-ossidazione servono per degradare completamente un acido grasso saturo a catena lineare di " + atomi + " atomi di carbonio?",
-          value: atomi / 2 - 1, unit: "cicli", factor: 2, decimals: 0,
-          explanation: "Per un acido grasso saturo di n atomi di carbonio servono n/2 − 1 cicli.",
-          note: "Errore tipico: usare n/2 cicli, dimenticando che l'ultimo passaggio produce due molecole di acetil-CoA."
-        };
-      }
-    })
-  ]
-};
+   STEP 1 — Aree obbligatorie: ogni esame dichiara 4-5 macro-aree
+            reali del proprio programma. Le 10 domande sono
+            distribuite tra le aree, non pescate a caso.
+   STEP 2 — Finestra mobile anti-ripetizione: prima di collocare
+            una domanda si confrontano schema algoritmico e area
+            con la domanda precedente. Se coincidono, la
+            domanda viene scartata.
+   STEP 3 — Distrattori dinamici: ogni risposta sbagliata nasce
+            da un errore tipico reale e porta con sé la
+            spiegazione dell'errore nella revisione.
 
-EXAM_AREAS["fisiologia"] = {
-  name: "Fisiologia umana",
-  areas: [
-    area("cardiaca", "Fisiologia cardiaca", "calcolo", {
-      compute: function (rng) {
-        const fc = randInt(rng, 55, 100), gs = randInt(rng, 50, 90);
-        return {
-          prompt: "Un soggetto ha frequenza cardiaca di " + fc + " battiti al minuto e gittata sistolica di " + gs + " mL. Qual è la portata cardiaca in mL/min?",
-          value: fc * gs, unit: "mL/min", factor: 2, decimals: 0,
-          explanation: "La portata cardiaca è frequenza × gittata sistolica.",
-          note: "Errore tipico: sommare frequenza e gittata invece di moltiplicarle."
-        };
-      }
-    }),
-    area("respiratoria", "Fisiologia respiratoria", "calcolo", {
-      compute: function (rng) {
-        const vc = randInt(rng, 400, 700), spazio = randInt(rng, 120, 160);
-        return {
-          prompt: "Con un volume corrente di " + vc + " mL e uno spazio morto anatomico di " + spazio + " mL, qual è la ventilazione alveolare per atto respiratorio?",
-          value: vc - spazio, unit: "mL", factor: 2, decimals: 0,
-          explanation: "La ventilazione alveolare è volume corrente meno spazio morto.",
-          note: "Errore tipico: sommare spazio morto e volume corrente invece di sottrarre."
-        };
-      }
-    }),
-    area("renale", "Fisiologia renale", "calcolo", {
-      compute: function (rng) {
-        const vfg = randInt(rng, 90, 140), riass = randInt(rng, 90, 99);
-        return {
-          prompt: "Con velocità di filtrazione glomerulare di " + vfg + " mL/min e riassorbimento tubulare del " + riass + "%, qual è il volume di urina prodotto al minuto?",
-          value: Math.round(vfg * (1 - riass / 100) * 100) / 100, unit: "mL/min", factor: 2, decimals: 2,
-          explanation: "Il volume escreto è VFG × (100 − riassorbimento)/100.",
-          note: "Errore tipico: usare la percentuale di riassorbimento come volume escreto anziché come quota trattenuta."
-        };
-      }
-    }),
-    area("neuro", "Fisiologia del sistema nervoso", "conseguenza", {
-      consequences: [
-        { id: "soglia", cause: "lo stimolo raggiunge la soglia di depolarizzazione della membrana", effect: "si genera un potenziale d'azione con andamento tutto-o-nulla" },
-        { id: "refrattario", cause: "il neurone si trova nel periodo refrattario assoluto", effect: "non può essere eccitato da alcuno stimolo, qualunque ne sia l'intensità" },
-        { id: "pompa", cause: "la pompa sodio-potassio ripristina i gradienti ionici", effect: "si ristabilisce il potenziale di riposo della membrana" },
-        { id: "mielina", cause: "la fibra nervosa è amielinica", effect: "la velocità di conduzione risulta inferiore rispetto a una fibra mielinica di pari diametro" }
-      ]
-    })
-  ]
-};
+   Regola di onestà: se un esame non ha aree sufficienti, il
+   motore lo segnala come non disponibile invece di inventare
+   domande.
+   ============================================================ */
 
-EXAM_AREAS["anatomia"] = {
-  name: "Anatomia umana",
-  areas: [
-    area("scheletro", "Apparato scheletrico", "calcolo", {
-      compute: function (rng) {
-        const tipi = [{ t: "cervicali", v: 7 }, { t: "toraciche", v: 12 }, { t: "lombari", v: 5 }];
-        const x = pick(rng, tipi);
-        return {
-          prompt: "Quante vertebre " + x.t + " compongono il tratto corrispondente della colonna vertebrale?",
-          value: x.v, unit: "vertebre", factor: 2, decimals: 0,
-          explanation: "Il tratto " + x.t + " della colonna comprende " + x.v + " vertebre.",
-          note: "Errore tipico: scambiare il numero di vertebre tra i diversi tratti della colonna."
-        };
-      }
-    }),
-    area("muscoli", "Apparato muscolare", "definizione", {
-      sets: [{
-        question: "Nell'apparato muscolare e nei tessuti connettivi,",
-        items: [
-          { id: "tendine", label: "il tendine", text: "la struttura di tessuto connettivo fibroso denso che connette il muscolo all'osso" },
-          { id: "legamento", label: "il legamento", text: "la struttura che connette tra loro due ossa, stabilizzando l'articolazione" },
-          { id: "cartilagine", label: "la cartilagine articolare", text: "il rivestimento che riduce l'attrito tra le superfici ossee dell'articolazione" },
-          { id: "fascia", label: "la fascia", text: "la lamina di tessuto connettivo che avvolge e separa i gruppi muscolari" }
-        ]
-      }]
-    }),
-    area("circolazione", "Apparato cardiovascolare", "conseguenza", {
-      consequences: [
-        { id: "aorta", cause: "il ventricolo sinistro si contrae", effect: "il sangue ossigenato viene immesso nell'aorta e distribuito alla circolazione sistemica" },
-        { id: "polmonare", cause: "il ventricolo destro si contrae", effect: "il sangue deossigenato è inviato alla circolazione polmonare attraverso l'arteria polmonare" },
-        { id: "valvole", cause: "la pressione ventricolare supera quella atriale durante la sistole", effect: "le valvole atrioventricolari si chiudono impedendo il reflusso verso gli atri" },
-        { id: "coronarie", cause: "le arterie coronarie si occludono parzialmente", effect: "si riduce l'apporto di ossigeno al miocardio, con rischio di ischemia" }
-      ]
-    }),
-    area("respirazione", "Apparato respiratorio", "calcolo", {
-      compute: function (rng) {
-        const freq = randInt(rng, 10, 24), vol = randInt(rng, 350, 600);
-        return {
-          prompt: "Un soggetto ha frequenza respiratoria di " + freq + " atti al minuto e volume corrente di " + vol + " mL. Qual è la ventilazione al minuto in mL?",
-          value: freq * vol, unit: "mL/min", factor: 2, decimals: 0,
-          explanation: "La ventilazione al minuto è frequenza × volume corrente.",
-          note: "Errore tipico: sommare frequenza e volume invece di moltiplicarli."
-        };
-      }
-    }),
-    area("nervoso", "Sistema nervoso", "classificazione", {
-      classes: [
-        { id: "snc", label: "sistema nervoso centrale", members: ["l'encefalo", "il midollo spinale"] },
-        { id: "snp", label: "sistema nervoso periferico", members: ["i nervi cranici", "i nervi spinali"] },
-        { id: "autonomo", label: "sistema nervoso autonomo", members: ["il sistema simpatico", "il sistema parasimpatico"] }
-      ]
-    })
-  ]
-};
+const QUESTIONS_PER_SESSION = 10;
+const MIN_AREAS = 4;
 
-EXAM_AREAS["istologia"] = {
-  name: "Istologia",
+/* ---------- RNG deterministico (mulberry32) ---------- */
+function createRng(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function pick(rng, arr) { return arr[Math.floor(rng() * arr.length)]; }
+function randInt(rng, min, max) { return Math.floor(rng() * (max - min + 1)) + min; }
+function fmt(n) { return Number(n).toLocaleString("it-IT"); }
+
+function shuffleFisherYates(rng, array) {
+  const a = array.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    const temp = a[i];
+    a[i] = a[j];
+    a[j] = temp;
+  }
+  return a;
+}
+
+/* ============================================================
+   DISTRATTORI NUMERICI
+   Le opzioni sbagliate sono perturbazioni della risposta giusta
+   che corrispondono a errori di calcolo reali.
+   ============================================================ */
+const roundKey = (v) => String(Number(Number(v).toFixed(5)));
+
+function numericDynamics(value, factor) {
+  const out = [];
+  if (value !== 0) out.push({ value: value / factor, why: "dimenticato il fattore " + factor });
+  out.push({ value: value * factor, why: "fattore " + factor + " applicato due volte" });
+  out.push({ value: value * 10, why: "errore di una potenza di dieci" });
+  out.push({ value: value / 10, why: "errore di scala di un ordine" });
+  if (value !== 0) out.push({ value: 1 / value, why: "rapporto invertito" });
+  return out;
+}
+
+function buildNumericOptions(correctValue, opts) {
+  const o = opts || {};
+  const factor = o.factor || 2;
+  const unit = o.unit || "";
+  const decimals = o.decimals === undefined ? 2 : o.decimals;
+  const render = (v) => {
+    const n = Number(Number(v).toFixed(decimals));
+    return unit ? fmt(n) + " " + unit : fmt(n);
+  };
+
+  const seen = {};
+  seen[roundKey(correctValue)] = true;
+  const options = [render(correctValue)];
+  const notes = [];
+
+  const dyn = numericDynamics(correctValue, factor);
+  for (let i = 0; i < dyn.length; i++) {
+    const d = dyn[i];
+    if (!isFinite(d.value)) continue;
+    const k = roundKey(d.value);
+    if (seen[k]) continue;
+    seen[k] = true;
+    options.push(render(d.value));
+    notes.push(d.why);
+    if (options.length === 4) break;
+  }
+
+  let m = 3;
+  while (options.length < 4) {
+    const v = correctValue * m;
+    const k = roundKey(v);
+    if (!seen[k] && isFinite(v)) {
+      seen[k] = true;
+      options.push(render(v));
+      notes.push("fattore " + m + " applicato per errore");
+    }
+    m++;
+  }
+  return { correctText: render(correctValue), distractors: options.slice(1), notes: notes };
+}
+
+/* ============================================================
+   AREE PER MATERIA
+   Ogni area produce domande con il proprio schema algoritmico.
+   ============================================================ */
+const AREA_INDEX = {};
+
+function area(id, name, kind, spec) {
+  return { id: id, name: name, kind: kind, spec: spec };
+}
+
+function regolaCaso(prompt, correct, distractors, note) {
+  return function () {
+    return { prompt: prompt, correct: correct, distractors: distractors, note: note };
+  };
+}
+
+/* ---------------- DIRITTO COSTITUZIONALE ---------------- */
+AREA_INDEX["diritto-costituzionale"] = {
+  name: "Diritto costituzionale",
   areas: [
-    area("epiteliale", "Tessuto epiteliale", "definizione", {
-      sets: [{
-        question: "Nell'istologia dei tessuti epiteliali,",
-        items: [
-          { id: "pavimentoso", label: "l'epitelio pavimentoso semplice", text: "l'epitelio di un solo strato di cellule appiattite, presente negli alveoli polmonari dove facilita la diffusione" },
-          { id: "cubico", label: "l'epitelio cubico semplice", text: "l'epitelio di cellule cuboidali, tipico dei tubuli renali e dei dotti ghiandolari" },
-          { id: "stratificato", label: "l'epitelio pavimentoso stratificato", text: "l'epitelio pluristratificato con cellule superficiali appiattite, adatto a resistere all'abrasione" },
-          { id: "ciliato", label: "l'epitelio cilindrico ciliato", text: "l'epitelio di cellule alte dotate di ciglia, presente nelle vie respiratorie per il trasporto del muco" }
-        ]
-      }]
-    }),
-    area("connettivo", "Tessuto connettivo", "classificazione", {
-      classes: [
-        { id: "proprio", label: "connettivo propriamente detto", members: ["il tessuto connettivo lasso", "il tessuto connettivo denso"] },
-        { id: "sostegno", label: "connettivo di sostegno", members: ["il tessuto cartilagineo", "il tessuto osseo"] },
-        { id: "trofico", label: "connettivo a funzione trofica", members: ["il sangue", "il tessuto adiposo"] }
-      ]
-    }),
-    area("muscolare", "Tessuto muscolare", "regola-caso", {
-      cases: [function () {
-        return {
-          prompt: "Quale caratteristica distingue il tessuto muscolare cardiaco dal muscolo scheletrico?",
-          correct: "le cellule cardiache sono mononucleate e unite da dischi intercalari che consentono la contrazione sincrona",
-          distractors: [
-            "le cellule cardiache sono plurinucleate e prive di striature",
-            "il muscolo cardiaco è volontario mentre lo scheletrico è involontario",
-            "il muscolo cardiaco non contiene actina né miosina"
+    area("fonti", "Fonti del diritto", "regola-caso", {
+      cases: [
+        regolaCaso(
+          "Nel conflitto tra un regolamento governativo e una legge ordinaria, quale fonte prevale?",
+          "prevale la legge ordinaria, perché la fonte secondaria non può derogare a quella primaria per il criterio gerarchico",
+          [
+            "prevale il regolamento, essendo la fonte più recente per il criterio cronologico",
+            "prevale il regolamento per il criterio di specialità della materia disciplinata",
+            "le due fonti si applicano congiuntamente, senza alcuna prevalenza"
           ],
-          note: "Errore tipico: attribuire al tessuto cardiaco la plurinucleazione propria del muscolo scheletrico."
-        };
-      }]
+          "Errore tipico: sovrapporre il criterio gerarchico a quello cronologico o di specialità."
+        ),
+        regolaCaso(
+          "Nel conflitto tra una legge regionale e un regolamento dell'Unione europea, quale prevale?",
+          "prevale il regolamento europeo, con disapplicazione della norma interna contrastante da parte del giudice comune",
+          [
+            "prevale la legge regionale, per competenza esclusiva della Regione",
+            "prevale la legge regionale se più favorevole al cittadino",
+            "le fonti sono pariordinate e il conflitto si risolve in via interpretativa"
+          ],
+          "Errore tipico: ritenere prevalente la legge regionale per competenza, ignorando il primato del diritto europeo."
+        ),
+        regolaCaso(
+          "Qual è l'effetto di un decreto-legge non convertito nei sessanta giorni?",
+          "perde efficacia con effetto retroattivo, con salvezza dei rapporti giuridici sorti nel periodo di vigenza",
+          [
+            "conserva efficacia fino a un'abrogazione espressa",
+            "si converte automaticamente in legge al termine del periodo",
+            "resta valido se non impugnato entro centoventi giorni"
+          ],
+          "Errore tipico: ritenere che il decreto non convertito conservi efficacia."
+        )
+      ]
     }),
-    area("nervoso", "Tessuto nervoso", "conseguenza", {
+    area("parlamento", "Parlamento e procedimento legislativo", "sequenza", {
+      sequences: [
+        { id: "iter", question: "Nel procedimento legislativo ordinario, dopo la fase dell'iniziativa:", first: "si apre l'esame in commissione e poi in assemblea, con discussione e votazione articolo per articolo" },
+        { id: "referente", question: "Nella procedura in sede referente:", first: "la commissione istruisce il progetto e riferisce all'assemblea, che delibera nel merito" },
+        { id: "deliberante", question: "Nella procedura in sede deliberante:", first: "la commissione approva il progetto in via definitiva, senza passaggio in assemblea, nei casi ammessi" },
+        { id: "revisione", question: "Nel procedimento di revisione costituzionale:", first: "si tiene la prima deliberazione con il procedimento legislativo ordinario" }
+      ]
+    }),
+    area("governo", "Governo e rapporto fiduciario", "regola-caso", {
+      cases: [
+        regolaCaso(
+          "Se il Governo pone la questione di fiducia e non ottiene la maggioranza, che cosa accade?",
+          "il Governo è obbligato a dimettersi, essendo venuto meno il rapporto fiduciario",
+          [
+            "il disegno di legge è rinviato alle Camere per un secondo esame",
+            "il Presidente della Repubblica scioglie automaticamente le Camere",
+            "la questione di fiducia si converte in mozione di sfiducia"
+          ],
+          "Errore tipico: ritenere che la mancata fiducia non comporti obbligo di dimissioni."
+        ),
+        regolaCaso(
+          "Entro quale termine il Governo neoformato deve presentarsi alle Camere per ottenere la fiducia?",
+          "entro dieci giorni dalla sua formazione, presentandosi a ciascuna Camera",
+          [
+            "entro trenta giorni dalla nomina",
+            "entro sessanta giorni dall'incarico",
+            "non è previsto alcun termine costituzionale"
+          ],
+          "Errore tipico: confondere il termine costituzionale con termini di prassi."
+        )
+      ]
+    }),
+    area("presidente", "Presidente della Repubblica", "regola-caso", {
+      cases: [
+        regolaCaso(
+          "Quale atto del Presidente della Repubblica è personalissimo e non richiede controfirma ministeriale?",
+          "l'atto di dimissioni dalla carica",
+          [
+            "lo scioglimento anticipato delle Camere",
+            "la nomina dei giudici della Corte costituzionale",
+            "la promulgazione delle leggi"
+          ],
+          "Errore tipico: ritenere esenti da controfirma atti che invece la richiedono."
+        ),
+        regolaCaso(
+          "Quanti giudici della Corte costituzionale nomina il Presidente della Repubblica?",
+          "cinque, come il Parlamento in seduta comune e le supreme magistrature",
+          ["tre", "quattro", "sette"],
+          "Errore tipico: sbagliare la ripartizione delle nomine tra gli organi."
+        )
+      ]
+    }),
+    area("giurisdizione", "Giurisdizione e Corte costituzionale", "conseguenza", {
       consequences: [
-        { id: "mielina", cause: "l'assone di un neurone è rivestito da guaina mielinica", effect: "la conduzione dello stimolo diventa saltatoria e più rapida rispetto a un assone amielinico" },
-        { id: "sinapsi", cause: "il potenziale d'azione raggiunge il terminale assonico", effect: "si liberano neurotrasmettitori nello spazio sinaptico, trasmettendo il segnale al neurone postsinaptico" },
-        { id: "glia", cause: "le cellule gliali svolgono funzioni di supporto e isolamento", effect: "garantiscono il microambiente dei neuroni, con astrociti, oligodendrociti e cellule di Schwann" },
-        { id: "lesione", cause: "il corpo cellulare del neurone subisce una lesione irreversibile", effect: "il neurone degenera, non essendo possibile la rigenerazione nel sistema nervoso centrale" }
+        { id: "conflitto", cause: "sorge un conflitto di attribuzione tra poteri dello Stato", effect: "decide la Corte costituzionale con sentenza che delimita le rispettive competenze" },
+        { id: "legittimita", cause: "il giudice solleva questione di legittimità costituzionale rilevante e non manifestamente infondata", effect: "la Corte giudica nel merito e dichiara l'illegittimità con effetti erga omnes" },
+        { id: "ricorso", cause: "lo Stato impugna una legge regionale per incompetenza", effect: "la Corte decide sul ricorso in via principale entro il termine previsto" },
+        { id: "sentenza", cause: "la Corte emette una sentenza di accoglimento", effect: "la norma cessa di avere efficacia dal giorno successivo alla pubblicazione" }
       ]
     })
   ]
