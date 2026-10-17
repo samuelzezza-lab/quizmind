@@ -1,0 +1,13 @@
+{
+  "nome": "Quizmind",
+  "nota": "Cartella di lavoro. I file dei blocchi del motore sono inaffidabili: alcuni sono stati troncati durante la scrittura e non vanno usati per costruire quiz/engine-completo.js.",
+  "stato": {
+    "data_faculties_js": "completo",
+    "data_schools_js": "completo",
+    "index_html": "da verificare",
+    "app_js": "presente",
+    "quiz_engine_completo_js": "MANCANTE"
+  },
+  "cosa_manca": "Il motore completo (65 KB) non e' stato caricato: supera il limite di scrittura dei tool usati.",
+  "come_completare": "Aprire la pagina del repository su GitHub, premere Add file, poi Upload files, trascinare il file del motore integrale e rinominarlo quiz/engine-completo.js, quindi premere Commit changes."
+}
