@@ -1,0 +1,247 @@
+/* ============================================================
+   Quizmind — motore, parte 3 di 5
+   Aree scientifiche e informatiche: chimica, statistica,
+   analisi matematica, programmazione, basi di dati.
+   ============================================================ */
+
+EXAM_AREAS["anatomia"] = {
+  name: "Anatomia umana",
+  areas: [
+    area("scheletro", "Apparato scheletrico", "calcolo", {
+      compute: function (rng) {
+        const tipi = [
+          { t: "cervicali", v: 7 },
+          { t: "toraciche", v: 12 },
+          { t: "lombari", v: 5 },
+          { t: "sacrali", v: 5 }
+        ];
+        const x = pick(rng, tipi);
+        return {
+          prompt: "Quante vertebre " + x.t + " compongono il tratto corrispondente della colonna vertebrale?",
+          value: x.v,
+          unit: "vertebre",
+          factor: 2,
+          decimals: 0,
+          explanation: "Il tratto " + x.t + " della colonna comprende " + x.v + " vertebre.",
+          note: "Errore tipico: scambiare il numero di vertebre tra i diversi tratti."
+        };
+      }
+    }),
+    area("muscoli", "Apparato muscolare", "definizione", {
+      sets: [{
+        question: "Nell'apparato muscolare e nei tessuti connettivi,",
+        items: [
+          { id: "tendine", label: "il tendine", text: "la struttura di tessuto connettivo fibroso denso che connette il muscolo all'osso" },
+          { id: "legamento", label: "il legamento", text: "la struttura che connette tra loro due ossa, stabilizzando l'articolazione" },
+          { id: "cartilagine", label: "la cartilagine articolare", text: "il rivestimento che riduce l'attrito tra le superfici ossee" },
+          { id: "fascia", label: "la fascia", text: "la lamina di tessuto connettivo che avvolge e separa i gruppi muscolari" }
+        ]
+      }]
+    }),
+    area("circolazione", "Apparato cardiovascolare", "conseguenza", {
+      consequences: [
+        { id: "aorta", cause: "il ventricolo sinistro si contrae", effect: "il sangue ossigenato viene immesso nell'aorta e distribuito alla circolazione sistemica" },
+        { id: "polmonare", cause: "il ventricolo destro si contrae", effect: "il sangue deossigenato e inviato alla circolazione polmonare" },
+        { id: "valvole", cause: "la pressione ventricolare supera quella atriale durante la sistole", effect: "le valvole atrioventricolari si chiudono impedendo il reflusso" },
+        { id: "coronarie", cause: "le arterie coronarie si occludono parzialmente", effect: "si riduce l'apporto di ossigeno al miocardio, con rischio di ischemia" }
+      ]
+    }),
+    area("respirazione", "Apparato respiratorio", "calcolo", {
+      compute: function (rng) {
+        const freq = randInt(rng, 10, 24);
+        const vol = randInt(rng, 350, 600);
+        return {
+          prompt: "Un soggetto ha frequenza respiratoria di " + freq + " atti al minuto e volume corrente di " + vol + " mL. Qual e la ventilazione al minuto?",
+          value: freq * vol,
+          unit: "mL/min",
+          factor: 2,
+          decimals: 0,
+          explanation: "La ventilazione al minuto e frequenza x volume = " + freq + " x " + vol + " = " + fmt(freq * vol) + " mL/min.",
+          note: "Errore tipico: sommare frequenza e volume invece di moltiplicarli."
+        };
+      }
+    })
+  ]
+};
+
+EXAM_AREAS["istologia"] = {
+  name: "Istologia",
+  areas: [
+    area("epiteliale", "Tessuto epiteliale", "definizione", {
+      sets: [{
+        question: "Nell'istologia dei tessuti epiteliali,",
+        items: [
+          { id: "pavimentoso", label: "l'epitelio pavimentoso semplice", text: "l'epitelio di un solo strato di cellule appiattite, presente negli alveoli polmonari" },
+          { id: "cubico", label: "l'epitelio cubico semplice", text: "l'epitelio di cellule cuboidali, tipico dei tubuli renali e dei dotti ghiandolari" },
+          { id: "stratificato", label: "l'epitelio pavimentoso stratificato", text: "l'epitelio pluristratificato adatto a resistere all'abrasione, come nell'epidermide" },
+          { id: "ciliato", label: "l'epitelio cilindrico ciliato", text: "l'epitelio di cellule alte con ciglia, presente nelle vie respiratorie" }
+        ]
+      }]
+    }),
+    area("connettivo", "Tessuto connettivo", "classificazione", {
+      classes: [
+        { id: "proprio", label: "connettivo propriamente detto", members: ["il tessuto connettivo lasso", "il tessuto connettivo denso"] },
+        { id: "sostegno", label: "connettivo di sostegno", members: ["il tessuto cartilagineo", "il tessuto osseo"] },
+        { id: "trofico", label: "connettivo a funzione trofica", members: ["il sangue", "il tessuto adiposo"] }
+      ]
+    }),
+    area("muscolare", "Tessuto muscolare", "regola-caso", {
+      cases: [
+        function () {
+          return {
+            prompt: "Quale caratteristica distingue il tessuto muscolare cardiaco dal muscolo scheletrico?",
+            correct: "le cellule cardiache sono mononucleate e unite da dischi intercalari che consentono la contrazione sincrona",
+            distractors: [
+              "le cellule cardiache sono plurinucleate e prive di striature",
+              "il muscolo cardiaco e volontario mentre lo scheletrico e involontario",
+              "il muscolo cardiaco non contiene actina ne miosina"
+            ],
+            note: "Errore tipico: attribuire al tessuto cardiaco la plurinucleazione del muscolo scheletrico."
+          };
+        }
+      ]
+    }),
+    area("nervoso", "Tessuto nervoso", "conseguenza", {
+      consequences: [
+        { id: "mielina", cause: "l'assone di un neurone e rivestito da guaina mielinica", effect: "la conduzione dello stimolo diventa saltatoria e piu rapida" },
+        { id: "sinapsi", cause: "il potenziale d'azione raggiunge il terminale assonico", effect: "si liberano neurotrasmettitori nello spazio sinaptico" },
+        { id: "glia", cause: "le cellule gliali svolgono funzioni di supporto e isolamento", effect: "garantiscono il microambiente dei neuroni, con astrociti e oligodendrociti" },
+        { id: "lesione", cause: "il corpo cellulare del neurone subisce una lesione irreversibile", effect: "il neurone degenera, non essendo possibile la rigenerazione nel sistema nervoso centrale" }
+      ]
+    })
+  ]
+};
+
+EXAM_AREAS["chimica"] = {
+  name: "Chimica",
+  areas: [
+    area("stechiometria", "Stechiometria", "calcolo", {
+      compute: function (rng) {
+        const mol = randInt(rng, 2, 9);
+        const massa = Number((mol * 18.015).toFixed(1));
+        return {
+          prompt: "Quante moli di acqua contiene una massa di " + fmt(massa) + " g di H2O? (massa molare 18,015 g/mol)",
+          value: mol,
+          unit: "mol",
+          factor: 2,
+          decimals: 2,
+          explanation: "Dividendo la massa per la massa molare: " + massa + " / 18,015 = " + mol + " mol.",
+          note: "Errore tipico: moltiplicare per la massa molare invece di dividere."
+        };
+      }
+    }),
+    area("soluzioni", "Soluzioni e molarita", "calcolo", {
+      compute: function (rng) {
+        const moli = randInt(rng, 1, 6);
+        const litri = randInt(rng, 1, 5);
+        const m = Math.round((moli / litri) * 1000) / 1000;
+        return {
+          prompt: "Una soluzione contiene " + moli + " mol di soluto in " + litri + " L. Qual e la molarita?",
+          value: m,
+          unit: "mol/L",
+          factor: 2,
+          decimals: 3,
+          explanation: "La molarita e moli/litri = " + moli + "/" + litri + " = " + fmt(m) + " mol/L.",
+          note: "Errore tipico: moltiplicare moli e litri invece di dividere."
+        };
+      }
+    }),
+    area("equilibri", "Equilibri e pH", "calcolo", {
+      compute: function (rng) {
+        const esp = randInt(rng, 1, 6);
+        return {
+          prompt: "Una soluzione acquosa ha concentrazione di ioni H+ pari a 10 elevato a meno " + esp + " mol/L. Qual e il pH?",
+          value: esp,
+          unit: "",
+          factor: 2,
+          decimals: 1,
+          explanation: "Il pH e l'opposto del logaritmo decimale della concentrazione di H+: pH = " + esp + ".",
+          note: "Errore tipico: invertire il rapporto con il pOH."
+        };
+      }
+    }),
+    area("atomo", "Struttura atomica", "calcolo", {
+      compute: function (rng) {
+        const z = randInt(rng, 3, 20);
+        const a = z + randInt(rng, 0, 6);
+        return {
+          prompt: "Un atomo ha numero atomico Z = " + z + " e numero di massa A = " + a + ". Quanti neutroni contiene il nucleo?",
+          value: a - z,
+          unit: "neutroni",
+          factor: 2,
+          decimals: 0,
+          explanation: "Il numero di neutroni e A - Z = " + a + " - " + z + " = " + (a - z) + ".",
+          note: "Errore tipico: usare Z come numero di neutroni."
+        };
+      }
+    })
+  ]
+};
+
+EXAM_AREAS["statistica"] = {
+  name: "Statistica",
+  areas: [
+    area("descrittiva", "Statistica descrittiva", "calcolo", {
+      compute: function (rng) {
+        const vals = [];
+        for (let i = 0; i < 5; i++) vals.push(randInt(rng, 2, 20));
+        const somma = vals.reduce(function (a, b) { return a + b; }, 0);
+        const media = Math.round((somma / vals.length) * 100) / 100;
+        return {
+          prompt: "Dato l'insieme di valori { " + vals.join(", ") + " }, qual e la media aritmetica?",
+          value: media,
+          unit: "",
+          factor: 2,
+          decimals: 2,
+          explanation: "La media e la somma divisa per il numero dei valori: " + somma + " / " + vals.length + " = " + fmt(media) + ".",
+          note: "Errore tipico: usare la mediana o il valore massimo al posto della media."
+        };
+      }
+    }),
+    area("probabilita", "Probabilita", "calcolo", {
+      compute: function (rng) {
+        const n = randInt(rng, 3, 5);
+        return {
+          prompt: "Si lancia " + n + " volte una moneta equilibrata. Qual e la probabilita di ottenere esattamente " + n + " teste? (5 decimali)",
+          value: Math.round((1 / Math.pow(2, n)) * 100000) / 100000,
+          unit: "",
+          factor: 2,
+          decimals: 5,
+          explanation: "Ogni lancio e indipendente con probabilita 1/2: il prodotto da 1/" + Math.pow(2, n) + ".",
+          note: "Errore tipico: sommare le probabilita dei singoli lanci invece di moltiplicarle."
+        };
+      }
+    }),
+    area("inferenza", "Inferenza statistica", "conseguenza", {
+      consequences: [
+        { id: "pvalore", cause: "il p-value di un test risulta inferiore al livello di significativita fissato", effect: "si rifiuta l'ipotesi nulla al livello scelto, con possibilita residua di errore di primo tipo" },
+        { id: "campione", cause: "la numerosita campionaria aumenta a parita di variabilita", effect: "l'errore standard della media diminuisce e la stima diventa piu precisa" },
+        { id: "tipo2", cause: "si accetta l'ipotesi nulla quando in realta e falsa", effect: "si commette un errore di secondo tipo, legato alla potenza del test" },
+        { id: "intervallo", cause: "si costruisce un intervallo di confidenza al 95% per la media", effect: "il livello di confidenza riguarda la procedura, non la singola stima" }
+      ]
+    }),
+    area("correlazione", "Correlazione e regressione", "calcolo", {
+      compute: function (rng) {
+        const n = randInt(rng, 6, 10);
+        let sx = 0, sy = 0, sxy = 0, sx2 = 0;
+        for (let i = 0; i < n; i++) {
+          const x = randInt(rng, 1, 10);
+          const y = x + randInt(rng, -2, 2);
+          sx += x; sy += y; sxy += x * y; sx2 += x * x;
+        }
+        const num = n * sxy - sx * sy;
+        const den = n * sx2 - sx * sx;
+        const b = den === 0 ? 0 : Math.round((num / den) * 1000) / 1000;
+        return {
+          prompt: "Date " + n + " coppie di valori, sapendo che la somma di x e " + sx + ", la somma di y e " + sy + ", la somma dei prodotti xy e " + sxy + " e la somma dei quadrati di x e " + sx2 + ", qual e il coefficiente angolare della retta di regressione di y su x? (3 decimali)",
+          value: b,
+          unit: "",
+          factor: 2,
+          decimals: 3,
+          explanation: "Il coefficiente angolare e b = (n*Sxy - Sx*Sy) / (n*Sxx - Sx^2) = " + fmt(b) + ".",
+          note: "Errore tipico: scambiare il ruolo di x e y, ottenendo il reciproco."
+        };
+      }
+    })
+  ]
+};
