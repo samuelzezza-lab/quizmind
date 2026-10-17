@@ -1,1 +1,224 @@
-PLACEHOLDER_ENGINE
+/* ============================================================
+   Quizmind — InstitutionalExamEngine
+   Factory di generazione a tre step obbligatori.
+
+   STEP 1 — Sottocategorie obbligatorie: ogni esame dichiara
+            4-5 macro-aree reali del proprio programma. Le 10
+            domande sono distribuite equamente tra le aree.
+   STEP 2 — Finestra mobile anti-ripetizione: controllo
+            sull'indice precedente (i-1). Se lo schema
+            algoritmico coincide, l'estrazione viene scartata
+            e si passa alla categoria successiva.
+   STEP 3 — Variazione parametrica e distrattori dinamici: i
+            valori cambiano a ogni avvio; i distrattori sono
+            calcolati perturbando l'errore tipico dello
+            studente, mai con risposte assurde.
+
+   Le aree di base sono specifiche per materia. Altri esami
+   arrivano dai moduli quiz/aree-*.js attraverso quiz-ponte.js.
+   ============================================================ */
+
+import { registraAree } from "./quiz-ponte.js";
+
+const QUESTIONS_PER_SESSION = 10;
+const MIN_AREAS = 4;
+
+/* ---------- RNG deterministico (mulberry32) ---------- */
+function createRng(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function pick(rng, arr) { return arr[Math.floor(rng() * arr.length)]; }
+function randInt(rng, min, max) { return Math.floor(rng() * (max - min + 1)) + min; }
+function fmt(n) { return Number(n).toLocaleString("it-IT"); }
+
+function shuffleFisherYates(rng, array) {
+  const a = array.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    const temp = a[i];
+    a[i] = a[j];
+    a[j] = temp;
+  }
+  return a;
+}
+
+/* ============================================================
+   STEP 3 — DISTRATTORI DINAMICI
+   ============================================================ */
+const roundKey = (v) => String(Number(Number(v).toFixed(5)));
+
+function numericDynamics(value, factor) {
+  const out = [];
+  if (value !== 0) out.push({ value: value / factor, why: "dimenticato il fattore " + factor });
+  out.push({ value: value * factor, why: "fattore " + factor + " applicato due volte" });
+  out.push({ value: value * 10, why: "errore di una potenza di dieci" });
+  out.push({ value: value / 10, why: "errore di scala di un ordine" });
+  if (value !== 0) out.push({ value: 1 / value, why: "rapporto invertito" });
+  return out;
+}
+
+function buildNumericOptions(correctValue, opts) {
+  const o = opts || {};
+  const factor = o.factor || 2;
+  const unit = o.unit || "";
+  const decimals = o.decimals === undefined ? 2 : o.decimals;
+  const render = (v) => {
+    const n = Number(Number(v).toFixed(decimals));
+    return unit ? fmt(n) + " " + unit : fmt(n);
+  };
+
+  const seen = {};
+  seen[roundKey(correctValue)] = true;
+  const options = [{ text: render(correctValue), correct: true, why: null }];
+  const notes = [];
+
+  const dyn = numericDynamics(correctValue, factor);
+  for (let i = 0; i < dyn.length; i++) {
+    const d = dyn[i];
+    if (!isFinite(d.value)) continue;
+    const k = roundKey(d.value);
+    if (seen[k]) continue;
+    seen[k] = true;
+    options.push({ text: render(d.value), correct: false, why: d.why });
+    notes.push(d.why);
+    if (options.length === 4) break;
+  }
+
+  let m = 3;
+  while (options.length < 4) {
+    const v = correctValue * m;
+    const k = roundKey(v);
+    if (!seen[k] && isFinite(v)) {
+      seen[k] = true;
+      options.push({ text: render(v), correct: false, why: "fattore " + m + " applicato per errore" });
+      notes.push("fattore " + m + " applicato per errore");
+    }
+    m++;
+  }
+  return { options: options, distractors: notes };
+}
+
+function validateOptions(options) {
+  if (!options || options.length !== 4) return false;
+  let corrects = 0;
+  for (let i = 0; i < options.length; i++) if (options[i].correct) corrects++;
+  if (corrects !== 1) return false;
+  const texts = options.map(function (o) { return String(o.text).trim(); });
+  for (let i = 0; i < texts.length; i++) if (!texts[i] || texts[i].length < 2) return false;
+  const uniq = {};
+  for (let i = 0; i < texts.length; i++) uniq[texts[i]] = true;
+  return Object.keys(uniq).length === 4;
+}
+
+/* ============================================================
+   GENERATORI PER SCHEMA ALGORITMICO (kind)
+   ============================================================ */
+const GENERATORS = {
+  definizione: function (rng, spec) {
+    const set = pick(rng, spec.sets);
+    const correct = pick(rng, set.items);
+    const others = shuffleFisherYates(rng, set.items.filter(function (i) { return i.id !== correct.id; }));
+    return {
+      prompt: set.question + " Che cos'è " + correct.label + "?",
+      options: [{ text: correct.text, correct: true, why: null }].concat(
+        others.slice(0, 3).map(function (o) {
+          return { text: o.text, correct: false, why: "confusione con una figura affine della stessa materia" };
+        })
+      ),
+      errorNote: "Errore tipico: confondere istituti o grandezze affini per funzione, non per denominazione."
+    };
+  },
+
+  norma: function (rng, spec) {
+    const pairs = spec.pairs;
+    const x = pick(rng, pairs);
+    const wrong = shuffleFisherYates(rng, pairs.filter(function (p) { return p.ref !== x.ref; }));
+    return {
+      prompt: "A quale riferimento corrisponde il seguente enunciato? «" + x.text + "»",
+      options: [{ text: x.ref, correct: true, why: null }].concat(
+        wrong.slice(0, 3).map(function (p) {
+          return { text: p.ref, correct: false, why: "riferimento vicino per materia ma non pertinente al caso" };
+        })
+      ),
+      errorNote: "Errore tipico: citare una norma vicina per materia ma non applicabile alla fattispecie."
+    };
+  },
+
+  "regola-caso": function (rng, spec) {
+    const built = pick(rng, spec.cases)(rng);
+    return {
+      prompt: built.prompt,
+      options: [{ text: built.correct, correct: true, why: null }].concat(
+        built.distractors.map(function (d) {
+          return { text: d, correct: false, why: built.note };
+        })
+      ),
+      errorNote: built.note
+    };
+  },
+
+  calcolo: function (rng, spec) {
+    const built = spec.compute(rng);
+    return {
+      prompt: built.prompt,
+      numeric: {
+        value: built.value,
+        unit: built.unit,
+        factor: built.factor || 2,
+        decimals: built.decimals === undefined ? 2 : built.decimals
+      },
+      explanation: built.explanation,
+      errorNote: built.note
+    };
+  },
+
+  classificazione: function (rng, spec) {
+    const classe = pick(rng, spec.classes);
+    const membro = pick(rng, classe.members);
+    const wrong = shuffleFisherYates(rng, spec.classes.filter(function (c) { return c.id !== classe.id; }));
+    return {
+      prompt: "In quale categoria rientra " + membro + "?",
+      options: [{ text: classe.label, correct: true, why: null }].concat(
+        wrong.slice(0, 3).map(function (w) {
+          return { text: w.label, correct: false, why: "categoria attribuita per assonanza" };
+        })
+      ),
+      errorNote: "Errore tipico: attribuire al caso una categoria vicina ma con requisiti diversi."
+    };
+  },
+
+  sequenza: function (rng, spec) {
+    const s = pick(rng, spec.sequences);
+    const wrong = shuffleFisherYates(rng, spec.sequences.filter(function (x) { return x.id !== s.id; }));
+    return {
+      prompt: s.question + " Qual è il primo passaggio?",
+      options: [{ text: s.first, correct: true, why: null }].concat(
+        wrong.slice(0, 3).map(function (w) {
+          return { text: w.first, correct: false, why: "fase spostata di posizione nella sequenza" };
+        })
+      ),
+      errorNote: "Errore tipico: anticipare o posticipare una fase della sequenza procedurale."
+    };
+  },
+
+  conseguenza: function (rng, spec) {
+    const c = pick(rng, spec.consequences);
+    const wrong = shuffleFisherYates(rng, spec.consequences.filter(function (x) { return x.id !== c.id; }));
+    return {
+      prompt: "Dato il presupposto «" + c.cause + "», quale conseguenza ne deriva?",
+      options: [{ text: c.effect, correct: true, why: null }].concat(
+        wrong.slice(0, 3).map(function (w) {
+          return { text: w.effect, correct: false, why: "conseguenza corretta in astratto ma non prodotta dal presupposto" };
+        })
+      ),
+      errorNote: "Errore tipico: applicare una conseguenza valida in astratto a un presupposto che non la produce."
+    };
+  }
+};
