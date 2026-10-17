@@ -1,22 +1,20 @@
 /* ============================================================
-   Quizmind — Ponte tra le aree modulari e il motore
+   Quizmind — ponte tra le aree modulari e il motore
    ------------------------------------------------------------
-   I file quiz/aree-*.js dichiarano gli esami in forma snella:
-     { name, areas: [{ id, name, kind, cases: [fn, fn, fn] }] }
-   Il motore si aspetta invece la forma:
+   I moduli quiz/aree-*.js dichiarano esami in forma snella:
+     { name, areas: [{ id, name, kind, cases: [fn] }] }
+   Il motore usa invece:
      { name, areas: [{ id, name, kind, spec: { cases: [fn] } }] }
-
    Questo modulo converte la prima nella seconda e la registra
-   nel registro del motore, così le aree nuove diventano
-   immediatamente utilizzabili da generateSession().
+   dentro AREA_INDEX, cosi le aree nuove sono subito
+   utilizzabili da generateSession().
    ============================================================ */
 
-import { AREE_GIURIDICHE } from "./aree-giuridiche.js";
-import { AREE_GIURIDICHE_2 } from "./aree-giuridiche-2.js";
+import { AREA_INDEX } from "./engine-core.js";
 
-/* Converte una collezione di esami nella forma attesa dal motore. */
 function converti(collezione) {
   const out = {};
+  if (!collezione) return out;
   for (const slug of Object.keys(collezione)) {
     const def = collezione[slug];
     out[slug] = {
@@ -26,7 +24,7 @@ function converti(collezione) {
           id: a.id,
           name: a.name,
           kind: a.kind || "regola-caso",
-          spec: { cases: a.cases }
+          spec: { cases: a.cases, sets: a.sets, pairs: a.pairs, sequences: a.sequences, consequences: a.consequences, classes: a.classes, compute: a.compute }
         };
       })
     };
@@ -34,29 +32,22 @@ function converti(collezione) {
   return out;
 }
 
-const AREE_MODULARI = Object.assign(
-  {},
-  converti(AREE_GIURIDICHE),
-  converti(AREE_GIURIDICHE_2)
-);
-
-/* Registra le aree nel registro passato dal motore. Il motore chiama
-   questa funzione una volta, prima di costruire il proprio indice,
-   così un esame con aree proprie non viene coperto da un alias. */
-function registraAree(registro) {
+/* Registra nel motore le aree contenute in un modulo quiz/aree-*.js.
+   Le materie gia coperte dal motore non vengono sovrascritte. */
+function registraAree(collezione) {
+  const convertite = converti(collezione);
   let aggiunti = 0;
-  for (const slug of Object.keys(AREE_MODULARI)) {
-    if (!registro[slug]) {
-      registro[slug] = AREE_MODULARI[slug];
-      aggiunti++;
-    }
+  for (const slug of Object.keys(convertite)) {
+    if (AREA_INDEX[slug]) continue;
+    AREA_INDEX[slug] = convertite[slug];
+    aggiunti++;
   }
   return aggiunti;
 }
 
-/* Elenco degli esami coperti da questi moduli. */
-function esamiModulari() {
-  return Object.keys(AREE_MODULARI).sort();
+/* Elenco ordinato delle materie coperte dal motore. */
+function esamiRegistrati() {
+  return Object.keys(AREA_INDEX).sort();
 }
 
-export { AREE_MODULARI, registraAree, esamiModulari, converti };
+export { registraAree, esamiRegistrati, converti };
