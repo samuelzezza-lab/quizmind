@@ -1,0 +1,312 @@
+/* ============================================================
+   Quizmind — motore, parte 1 di 5
+   Intestazione, RNG, distrattori dinamici, validazione,
+   generatori per schema algoritmico, aree giuridiche di base.
+   Il file completo si ottiene con: node scratch/ricomponi.js
+   ============================================================ */
+
+import { registraAree } from "./quiz-ponte.js";
+
+const QUESTIONS_PER_SESSION = 10;
+const MIN_AREAS = 4;
+
+function createRng(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function pick(rng, arr) { return arr[Math.floor(rng() * arr.length)]; }
+function randInt(rng, min, max) { return Math.floor(rng() * (max - min + 1)) + min; }
+function fmt(n) { return Number(n).toLocaleString("it-IT"); }
+
+function shuffleFisherYates(rng, array) {
+  const a = array.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    const temp = a[i];
+    a[i] = a[j];
+    a[j] = temp;
+  }
+  return a;
+}
+
+const roundKey = (v) => String(Number(Number(v).toFixed(5)));
+
+function numericDynamics(value, factor) {
+  const out = [];
+  if (value !== 0) out.push({ value: value / factor, why: "dimenticato il fattore " + factor });
+  out.push({ value: value * factor, why: "fattore " + factor + " applicato due volte" });
+  out.push({ value: value * 10, why: "errore di una potenza di dieci" });
+  out.push({ value: value / 10, why: "errore di scala di un ordine" });
+  if (value !== 0) out.push({ value: 1 / value, why: "rapporto invertito" });
+  return out;
+}
+
+function buildNumericOptions(correctValue, opts) {
+  const o = opts || {};
+  const factor = o.factor || 2;
+  const unit = o.unit || "";
+  const decimals = o.decimals === undefined ? 2 : o.decimals;
+  const render = (v) => {
+    const n = Number(Number(v).toFixed(decimals));
+    return unit ? fmt(n) + " " + unit : fmt(n);
+  };
+
+  const seen = {};
+  seen[roundKey(correctValue)] = true;
+  const options = [{ text: render(correctValue), correct: true, why: null }];
+  const notes = [];
+
+  const dyn = numericDynamics(correctValue, factor);
+  for (let i = 0; i < dyn.length; i++) {
+    const d = dyn[i];
+    if (!isFinite(d.value)) continue;
+    const k = roundKey(d.value);
+    if (seen[k]) continue;
+    seen[k] = true;
+    options.push({ text: render(d.value), correct: false, why: d.why });
+    notes.push(d.why);
+    if (options.length === 4) break;
+  }
+
+  let m = 3;
+  while (options.length < 4) {
+    const v = correctValue * m;
+    const k = roundKey(v);
+    if (!seen[k] && isFinite(v)) {
+      seen[k] = true;
+      options.push({ text: render(v), correct: false, why: "fattore " + m + " applicato per errore" });
+      notes.push("fattore " + m + " applicato per errore");
+    }
+    m++;
+  }
+  return { options: options, distractors: notes };
+}
+
+function validateOptions(options) {
+  if (!options || options.length !== 4) return false;
+  let corrects = 0;
+  for (let i = 0; i < options.length; i++) if (options[i].correct) corrects++;
+  if (corrects !== 1) return false;
+  const texts = options.map(function (o) { return String(o.text).trim(); });
+  for (let i = 0; i < texts.length; i++) if (!texts[i] || texts[i].length < 2) return false;
+  const uniq = {};
+  for (let i = 0; i < texts.length; i++) uniq[texts[i]] = true;
+  return Object.keys(uniq).length === 4;
+}
+
+const GENERATORS = {
+  definizione: function (rng, spec) {
+    const set = pick(rng, spec.sets);
+    const correct = pick(rng, set.items);
+    const others = shuffleFisherYates(rng, set.items.filter(function (i) { return i.id !== correct.id; }));
+    return {
+      prompt: set.question + " Che cos'e " + correct.label + "?",
+      options: [{ text: correct.text, correct: true, why: null }].concat(
+        others.slice(0, 3).map(function (o) {
+          return { text: o.text, correct: false, why: "confusione con una figura affine della stessa materia" };
+        })
+      ),
+      errorNote: "Errore tipico: confondere istituti o grandezze affini per funzione, non per denominazione."
+    };
+  },
+
+  norma: function (rng, spec) {
+    const pairs = spec.pairs;
+    const x = pick(rng, pairs);
+    const wrong = shuffleFisherYates(rng, pairs.filter(function (p) { return p.ref !== x.ref; }));
+    return {
+      prompt: "A quale riferimento corrisponde il seguente enunciato? «" + x.text + "»",
+      options: [{ text: x.ref, correct: true, why: null }].concat(
+        wrong.slice(0, 3).map(function (p) {
+          return { text: p.ref, correct: false, why: "riferimento vicino per materia ma non pertinente al caso" };
+        })
+      ),
+      errorNote: "Errore tipico: citare una norma vicina per materia ma non applicabile alla fattispecie."
+    };
+  },
+
+  "regola-caso": function (rng, spec) {
+    const built = pick(rng, spec.cases)(rng);
+    return {
+      prompt: built.prompt,
+      options: [{ text: built.correct, correct: true, why: null }].concat(
+        built.distractors.map(function (d) {
+          return { text: d, correct: false, why: built.note };
+        })
+      ),
+      errorNote: built.note
+    };
+  },
+
+  calcolo: function (rng, spec) {
+    const built = spec.compute(rng);
+    return {
+      prompt: built.prompt,
+      numeric: {
+        value: built.value,
+        unit: built.unit,
+        factor: built.factor || 2,
+        decimals: built.decimals === undefined ? 2 : built.decimals
+      },
+      explanation: built.explanation,
+      errorNote: built.note
+    };
+  },
+
+  classificazione: function (rng, spec) {
+    const classe = pick(rng, spec.classes);
+    const membro = pick(rng, classe.members);
+    const wrong = shuffleFisherYates(rng, spec.classes.filter(function (c) { return c.id !== classe.id; }));
+    return {
+      prompt: "In quale categoria rientra " + membro + "?",
+      options: [{ text: classe.label, correct: true, why: null }].concat(
+        wrong.slice(0, 3).map(function (w) {
+          return { text: w.label, correct: false, why: "categoria attribuita per assonanza" };
+        })
+      ),
+      errorNote: "Errore tipico: attribuire al caso una categoria vicina ma con requisiti diversi."
+    };
+  },
+
+  sequenza: function (rng, spec) {
+    const s = pick(rng, spec.sequences);
+    const wrong = shuffleFisherYates(rng, spec.sequences.filter(function (x) { return x.id !== s.id; }));
+    return {
+      prompt: s.question + " Qual e il primo passaggio?",
+      options: [{ text: s.first, correct: true, why: null }].concat(
+        wrong.slice(0, 3).map(function (w) {
+          return { text: w.first, correct: false, why: "fase spostata di posizione nella sequenza" };
+        })
+      ),
+      errorNote: "Errore tipico: anticipare o posticipare una fase della sequenza procedurale."
+    };
+  },
+
+  conseguenza: function (rng, spec) {
+    const c = pick(rng, spec.consequences);
+    const wrong = shuffleFisherYates(rng, spec.consequences.filter(function (x) { return x.id !== c.id; }));
+    return {
+      prompt: "Dato il presupposto «" + c.cause + "», quale conseguenza ne deriva?",
+      options: [{ text: c.effect, correct: true, why: null }].concat(
+        wrong.slice(0, 3).map(function (w) {
+          return { text: w.effect, correct: false, why: "conseguenza valida in astratto ma non prodotta dal presupposto" };
+        })
+      ),
+      errorNote: "Errore tipico: applicare una conseguenza valida in astratto a un presupposto che non la produce."
+    };
+  }
+};
+
+const EXAM_AREAS = {};
+
+function area(id, name, kind, spec) {
+  return { id: id, name: name, kind: kind, spec: spec };
+}
+
+EXAM_AREAS["diritto-costituzionale"] = {
+  name: "Diritto costituzionale",
+  areas: [
+    area("fonti", "Fonti del diritto", "regola-caso", {
+      cases: [
+        function () {
+          return {
+            prompt: "Nel conflitto tra un regolamento governativo e una legge ordinaria, quale fonte prevale?",
+            correct: "prevale la legge ordinaria, perche la fonte secondaria non puo derogare a quella primaria per il criterio gerarchico",
+            distractors: [
+              "prevale il regolamento, essendo la fonte piu recente per il criterio cronologico",
+              "prevale il regolamento per il criterio di specialita della materia disciplinata",
+              "le due fonti si applicano congiuntamente, senza alcuna prevalenza"
+            ],
+            note: "Errore tipico: sovrapporre il criterio gerarchico a quello cronologico o di specialita."
+          };
+        },
+        function () {
+          return {
+            prompt: "Qual e l'effetto di un decreto-legge non convertito nei sessanta giorni?",
+            correct: "perde efficacia con effetto retroattivo, con salvezza dei rapporti giuridici sorti nel periodo di vigenza",
+            distractors: [
+              "conserva efficacia fino a un'abrogazione espressa",
+              "si converte automaticamente in legge al termine del periodo",
+              "resta valido se non impugnato entro centoventi giorni"
+            ],
+            note: "Errore tipico: ritenere che il decreto non convertito conservi efficacia."
+          };
+        }
+      ]
+    }),
+    area("parlamento", "Parlamento e procedimento legislativo", "sequenza", {
+      sequences: [
+        { id: "iter", question: "Nel procedimento legislativo ordinario, dopo la fase dell'iniziativa:", first: "si apre l'esame in commissione e poi in assemblea, con discussione e votazione articolo per articolo" },
+        { id: "referente", question: "Nella procedura in sede referente:", first: "la commissione istruisce il progetto e riferisce all'assemblea, che delibera nel merito" },
+        { id: "deliberante", question: "Nella procedura in sede deliberante:", first: "la commissione approva il progetto in via definitiva, senza passaggio in assemblea, nei casi ammessi" },
+        { id: "revisione", question: "Nel procedimento di revisione costituzionale:", first: "si tiene la prima deliberazione con il procedimento legislativo ordinario" }
+      ]
+    }),
+    area("governo", "Governo e rapporto fiduciario", "regola-caso", {
+      cases: [
+        function () {
+          return {
+            prompt: "Se il Governo pone la questione di fiducia e non ottiene la maggioranza, che cosa accade?",
+            correct: "il Governo e obbligato a dimettersi, essendo venuto meno il rapporto fiduciario",
+            distractors: [
+              "il disegno di legge e rinviato alle Camere per un secondo esame",
+              "il Presidente della Repubblica scioglie automaticamente le Camere",
+              "la questione di fiducia si converte in mozione di sfiducia"
+            ],
+            note: "Errore tipico: ritenere che la mancata fiducia non comporti obbligo di dimissioni."
+          };
+        },
+        function () {
+          return {
+            prompt: "Entro quale termine il Governo neoformato deve presentarsi alle Camere per ottenere la fiducia?",
+            correct: "entro dieci giorni dalla sua formazione, presentandosi a ciascuna Camera",
+            distractors: [
+              "entro trenta giorni dalla nomina",
+              "entro sessanta giorni dall'incarico",
+              "non e previsto alcun termine costituzionale"
+            ],
+            note: "Errore tipico: confondere il termine costituzionale con termini di prassi."
+          };
+        }
+      ]
+    }),
+    area("presidente", "Presidente della Repubblica", "regola-caso", {
+      cases: [
+        function () {
+          return {
+            prompt: "Quale atto del Presidente della Repubblica e personalissimo e non richiede controfirma ministeriale?",
+            correct: "l'atto di dimissioni dalla carica",
+            distractors: [
+              "lo scioglimento anticipato delle Camere",
+              "la nomina dei giudici della Corte costituzionale",
+              "la promulgazione delle leggi"
+            ],
+            note: "Errore tipico: ritenere esenti da controfirma atti che invece la richiedono."
+          };
+        },
+        function () {
+          return {
+            prompt: "Quanti giudici della Corte costituzionale nomina il Presidente della Repubblica?",
+            correct: "cinque, come il Parlamento in seduta comune e le supreme magistrature",
+            distractors: ["tre", "quattro", "sette"],
+            note: "Errore tipico: sbagliare la ripartizione delle nomine tra gli organi."
+          };
+        }
+      ]
+    }),
+    area("giurisdizione", "Giurisdizione e Corte costituzionale", "conseguenza", {
+      consequences: [
+        { id: "conflitto", cause: "sorge un conflitto di attribuzione tra poteri dello Stato", effect: "decide la Corte costituzionale con sentenza che delimita le rispettive competenze" },
+        { id: "legittimita", cause: "il giudice solleva questione di legittimita costituzionale rilevante e non manifestamente infondata", effect: "la Corte giudica nel merito e dichiara l'illegittimita con effetti erga omnes" },
+        { id: "ricorso", cause: "lo Stato impugna una legge regionale per incompetenza", effect: "la Corte decide sul ricorso in via principale entro il termine previsto" },
+        { id: "sentenza", cause: "la Corte emette una sentenza di accoglimento", effect: "la norma cessa di avere efficacia dal giorno successivo alla pubblicazione" }
+      ]
+    })
+  ]
+};
