@@ -1,135 +1,180 @@
-/**
- * faculties-subjects.js
- * Database completo basato sulle Classi di Laurea Ministeriali (Triennale, Magistrale, Ciclo Unico)
- * e sui programmi ufficiali delle Scuole Superiori (Licei e Istituti).
- *
- * Struttura: ACADEMIC_SUBJECTS.university[corso].years[anno] = [materie]
- *            ACADEMIC_SUBJECTS.highschool[indirizzo].years[classe] = [materie]
- *
- * 30 corsi universitari e 10 indirizzi scolastici.
- */
-
-const ACADEMIC_SUBJECTS = {
-  // ==========================================
-  // 1. UNIVERSITA (30 Classi di Laurea / Facolta)
-  // ==========================================
-  university: {
-    "medicina-chirurgia": {
-      name: "Medicina e Chirurgia (LM-41)",
+    "lingue-mediazione": {
+      name: "Lingue e Mediazione Linguistica (L-11 / L-12 / LM-38)",
       years: {
-        1: ["Anatomia Umana I", "Chimica e Propedeutica Biochimica", "Fisica Medica", "Biologia e Genetica", "Istologia ed Embriologia"],
-        2: ["Anatomia Umana II", "Biochimica", "Fisiologia Umana", "Microbiologia e Virologia", "Immunologia e Immunopatologia"],
-        3: ["Patologia Generale", "Farmacologia Generale", "Anatomia Patologica I", "Semeiotica Medica e Chirurgica", "Statistica Medica ed Epidemiologia"],
-        4: ["Cardiologia e Pneumologia", "Gastroenterologia", "Endocrinologia e Malattie del Ricambio", "Nefrologia e Urologia", "Ematologia e Oncologia Medica", "Malattie Infettive", "Dermatologia e Venereologia", "Anatomia Patologica II"],
-        5: ["Neurologia e Psichiatria", "Ortopedia e Traumatologia", "Ginecologia e Ostetricia", "Pediatria Generale e Specialistica", "Otorinolaringoiatria e Oculistica", "Diagnostica per Immagini e Radioterapia"],
-        6: ["Medicina Interna", "Chirurgia Generale", "Medicina Legale", "Igiene e Sanita Pubblica", "Emergenze Medico-Chirurgiche"]
+        1: ["Lingua e Traduzione Inglese I", "Lingua e Traduzione Seconda Lingua I", "Linguistica Generale", "Letteratura della Prima Lingua I", "Storia Contemporanea"],
+        2: ["Lingua e Traduzione Inglese II", "Lingua e Traduzione Seconda Lingua II", "Letteratura della Seconda Lingua I", "Diritto Internazionale e Privato", "Glottologia"],
+        3: ["Lingua e Traduzione Inglese III", "Lingua e Traduzione Seconda Lingua III", "Tecniche di Interpretazione e Traduzione", "Sociolinguistica"],
+        4: ["Traduzione Specialistica e Editoriale", "Interpretazione di Conferenza", "Linguaggi Settoriali ed Economici"],
+        5: ["Traduzione Multimediale e Localizzazione", "Linguistica Computazionale", "Negotiation and Intercultural Communication"]
       }
     },
-    "giurisprudenza": {
-      name: "Giurisprudenza (LMG/01)",
+    "scienze-comunicazione": {
+      name: "Scienze della Comunicazione e Digital Media (L-20 / LM-92)",
       years: {
-        1: ["Istituzioni di Diritto Privato", "Istituzioni di Diritto Pubblico", "Storia del Diritto Romano", "Filosofia del Diritto", "Diritto Costituzionale"],
-        2: ["Diritto Commerciale", "Diritto del Lavoro", "Diritto dell'Unione Europea", "Diritto Ecclesiastico", "Storia del Diritto Medievale e Moderno"],
-        3: ["Diritto Penale I", "Diritto Amministrativo I", "Diritto Civile I", "Diritto Internazionale", "Sistemi Giuridici Comparati"],
-        4: ["Procedura Penale", "Diritto Processuale Civile", "Diritto Penale II", "Diritto Amministrativo II", "Diritto Tributario"],
-        5: ["Diritto Civile II", "Diritto Fallimentare e Crisi d'Impresa", "Medicina Legale", "Esecuzione Penale e Penitenziaria"]
+        1: ["Teorie e Tecniche della Comunicazione", "Sociologia della Comunicazione", "Semiotica", "Psicologia della Comunicazione", "Storia dei Media"],
+        2: ["Marketing e Comunicazione d'Impresa", "Diritto dell'Informazione e dei Media", "Informatica per la Comunicazione", "Linguaggi della Pubblicita", "Sociologia dei Consumi"],
+        3: ["Comunicazione Politica", "Giornalismo e Nuovi Media", "Tecniche di Comunicazione Digitale", "Metodologia della Ricerca Sociale"],
+        4: ["Social Media Management e Strategy", "Digital Marketing e SEO", "Produzione Multimediale", "Data Journalism"],
+        5: ["Brand Strategy Avanzata", "Etica e Diritto del Web", "Analytics e Big Data per i Media"]
       }
     },
-    "economia-aziendale": {
-      name: "Economia Aziendale e Management (L-18 / LM-77)",
+    "scienze-formazione-primaria": {
+      name: "Scienze della Formazione Primaria (LM-85 bis)",
       years: {
-        1: ["Economia Aziendale", "Microeconomia", "Matematica Generale", "Diritto Privato", "Statistica"],
-        2: ["Contabilita e Bilancio", "Macroeconomia", "Diritto Commerciale", "Finanza Aziendale", "Marketing"],
-        3: ["Programmazione e Controllo", "Diritto Tributario", "Organizzazione Aziendale", "Economia degli Intermediari Finanziari", "Economia Industriale"],
-        4: ["Finanza Aziendale Avanzata", "Corporate Governance", "Econometria", "Diritto Commerciale Progredito", "Strategia d'Impresa"],
-        5: ["International Business", "Valutazione d'Azienda", "Audit e Controllo di Gestione", "Gestione dell'Innovazione"]
+        1: ["Pedagogia Generale", "Psicologia dello Sviluppo", "Didattica Generale", "Storia della Scuola e della Pedagogia", "Sociologia dell'Educazione"],
+        2: ["Psicologia dell'Educazione", "Pedagogia Speciale e dell'Inclusione", "Didattica della Lingua Italiana", "Geografia e Didattica della Geografia", "Igiene e Salute Infantile"],
+        3: ["Didattica della Matematica", "Didattica della Storia", "Didattica delle Scienze Naturali", "Letteratura per l'Infanzia", "Musica e Didattica Musicale"],
+        4: ["Didattica dell'Inglese", "Teoria e Didattica dell'Educazione Motoria", "Tecnologie Didattiche", "Valutazione Scolastica"],
+        5: ["Pedagogia Interculturale", "Neuropsichiatria Infantile", "Laboratorio di Progettazione Didattica e Tesi"]
       }
     },
-    "ingegneria-informatica": {
-      name: "Ingegneria Informatica e AI (L-8 / LM-32)",
+    "biologia": {
+      name: "Scienze Biologiche (L-13 / LM-6)",
       years: {
-        1: ["Analisi Matematica I", "Geometria e Algebra Lineare", "Fisica I", "Fondamenti di Informatica", "Calcolatori Elettronici"],
-        2: ["Analisi Matematica II", "Fisica II", "Algoritmi e Strutture Dati", "Sistemi Operativi", "Reti di Calcolatori", "Elettrotecnica"],
-        3: ["Basi di Dati", "Ingegneria del Software", "Automatica e Teoria dei Sistemi", "Elettronica Digitale", "Sicurezza Informatica"],
-        4: ["Machine Learning e Intelligenza Artificiale", "Sistemi Distribuiti e Cloud Computing", "Cybersecurity Avanzata", "Visione Artificiale", "Elaborazione del Linguaggio Naturale"],
-        5: ["Big Data Analytics", "Robotica e Sistemi Autonomi", "Architetture Software Avanzate", "Sistemi Embedded e IoT"]
+        1: ["Citologia ed Istologia", "Botanica Generale e Sistematica", "Zoologia", "Chimica Generale ed Inorganica", "Matematica con Elementi di Statistica"],
+        2: ["Chimica Organica", "Biochimica", "Genetica Generale", "Fisiologia Vegetale", "Fisica"],
+        3: ["Fisiologia Generale", "Microbiologia Generale", "Ecologia", "Biologia Molecolare", "Igiene e Sanita"],
+        4: ["Biologia Cellulare Avanzata", "Genetica Molecolare Umana", "Bioinformatica", "Endocrinologia Comparata"],
+        5: ["Ecotossicologia", "Biotecnologie Biologiche", "Metodologie di Ricerca Biologica"]
       }
     },
-    "ingegneria-meccanica": {
-      name: "Ingegneria Meccanica (L-9 / LM-33)",
+    "chimica": {
+      name: "Chimica (L-27 / LM-54)",
       years: {
-        1: ["Analisi Matematica I", "Geometria", "Fisica I", "Chimica", "Disegno Tecnico Industriale"],
-        2: ["Analisi Matematica II", "Fisica II", "Meccanica Razionale", "Scienza delle Costruzioni", "Fisica Tecnica e Termodinamica"],
-        3: ["Meccanica Applicata alle Macchine", "Tecnologia Meccanica", "Macchine e Sistemi Energetici", "Costruzione di Macchine", "Impianti Industriali"],
-        4: ["Meccanica dei Fluidi Avanzata", "Robotica Industriale", "Progettazione Meccanica Computazionale", "Dinamica delle Macchine"],
-        5: ["Sistemi Energetici Avanzati", "Comportamento Meccanico dei Materiali", "Automazione Industriale", "Gestione dell'Innovazione Meccanica"]
+        1: ["Chimica Generale e Inorganica con Laboratorio", "Analisi Matematica I", "Fisica I", "Geometria", "Informatica per la Chimica"],
+        2: ["Chimica Organica I", "Chimica Analitica I", "Chimica Fisica I", "Analisi Matematica II", "Fisica II"],
+        3: ["Chimica Organica II", "Chimica Inorganica e della Coordinazione", "Chimica Fisica II e Spettroscopia", "Chimica Analitica II Strumentale"],
+        4: ["Chimica Organica Superiore", "Chimica Fisica dei Materiali", "Metodi Spettroscopici Avanzati"],
+        5: ["Chimica Industriale e Polimeri", "Sintesi Organica Avanzata", "Chimica Verde e Sostenibile"]
       }
     },
-    "psicologia": {
-      name: "Psicologia e Neuroscienze (L-24 / LM-51)",
+    "fisica": {
+      name: "Fisica (L-30 / LM-17)",
       years: {
-        1: ["Psicologia Generale", "Psicologia dello Sviluppo", "Fondamenti Anatomofisiologici dell'Attivita Psichica", "Metodologia della Ricerca Psicologica", "Sociologia Generale"],
-        2: ["Psicologia Sociale", "Psicobiologia e Psicologia Fisiologica", "Psicometria", "Psicologia Dinamica", "Psicologia del Lavoro e delle Organizzazioni"],
-        3: ["Psicologia Clinica", "Psicopatologia dello Sviluppo", "Neuroscienze Cognitive", "Psicologia della Salute", "Tecniche del Colloquio Psicologico"],
-        4: ["Neuropsicologia Clinica", "Psicodiagnostica Avanzata", "Psicoterapia e Modelli di Intervento", "Psicologia Cognitiva Applicata"],
-        5: ["Psicologia della Salute e Traumi", "Neuroscienze del Comportamento", "Valutazione e Riabilitazione Neuropsicologica", "Deontologia Professionale"]
+        1: ["Analisi Matematica I", "Geometria e Algebra Lineare", "Fisica Generale I (Meccanica e Termodinamica)", "Esperimentazioni di Fisica I", "Informatica e Programmazione"],
+        2: ["Analisi Matematica II", "Fisica Generale II (Elettromagnetismo ed Ottica)", "Meccanica Razionale e Analitica", "Esperimentazioni di Fisica II", "Metodi Matematici della Fisica"],
+        3: ["Meccanica Quantistica", "Fisica Statistica e Termodinamica", "Fisica della Materia", "Fisica Nucleare e Subnucleare", "Astrofisica Generale"],
+        4: ["Meccanica Quantistica Avanzata", "Relativita Generale e Gravitazione", "Fisica delle Particelle Elementari"],
+        5: ["Fisica dello Stato Solido", "Teoria dei Campi", "Fisica Computazionale Avanzata"]
       }
     },
-    "infermieristica": {
-      name: "Infermieristica (L/SNT1)",
+    "matematica": {
+      name: "Matematica (L-35 / LM-40)",
       years: {
-        1: ["Anatomia e Istologia", "Fisiologia e Biochimica", "Infermieristica Generale e Clinica", "Patologia Generale e Fisiopatologia", "Microbiologia e Igiene"],
-        2: ["Infermieristica Medico-Chirurgica", "Farmacologia", "Anatomia Patologica", "Medicina Interna e Chirurgia", "Psicologia Clinica e Pediatria"],
-        3: ["Infermieristica in Area Critica ed Emergenza", "Infermieristica di Sanita Pubblica e Comunita", "Diritto Sanitario e Deontologia", "Organizzazione dei Servizi Sanitari"]
+        1: ["Analisi Matematica I", "Algebra Lineare e Geometria I", "Algebra I", "Fisica Generale I", "Programmazione e Informatica"],
+        2: ["Analisi Matematica II", "Geometria II", "Fisica Generale II", "Meccanica Razionale", "Analisi Numerica e Calcolo Scientifico"],
+        3: ["Analisi Reale e Complessa", "Geometria Differenziale", "Probabilita e Statistica Matematica", "Fisica Matematica", "Algebra II e Strutture Algebriche"],
+        4: ["Analisi Funzionale", "Topologia Algebrica", "Equazioni alle Derivate Parziali", "Calcolo delle Variazioni"],
+        5: ["Sistemi Dinamici", "Geometria Algebrica Avanzata", "Probabilita Avanzata e Processi Stocastici"]
       }
     },
-    "biotecnologie": {
-      name: "Biotecnologie (L-2 / LM-8)",
+    "biotecnologie-mediche": {
+      name: "Biotecnologie Mediche e Farmaceutiche (L-2 / LM-9)",
       years: {
-        1: ["Chimica Generale e Inorganica", "Biologia Cellulare e Animale", "Matematica e Statistica", "Fisica Generale", "Botanica Generale"],
-        2: ["Chimica Organica", "Biochimica", "Genetica", "Microbiologia Generale", "Biologia Molecolare"],
-        3: ["Biotecnologie Ricombinanti", "Ingegneria Genetica", "Immunologia", "Farmacologia e Tossicologia", "Biotecnologie Industriali e Fermentazioni"],
-        4: ["Biotecnologie Mediche Avanzate", "Terapia Genica", "Proteomica e Genomica", "Bionanotecnologie"],
-        5: ["Sviluppo Processi Biotecnologici", "Brevetti e Regolamentazione Biotecnologica", "Bioinformatica Avanzata"]
+        1: ["Biologia Cellulare e Molecolare", "Chimica Medica", "Genetica Umana", "Anatomia e Fisiologia Umana", "Statistica Medica"],
+        2: ["Biochimica Clinica", "Microbiologia Medica e Virologia", "Immunologia Avanzata", "Patologia Molecolare", "Farmacologia Molecolare"],
+        3: ["Terapia Genica e Cellulare", "Oncologia Molecolare", "Sviluppo Farmaci e Biotecnologie", "Biosensori e Diagnostica"],
+        4: ["Ingegneria Tessile e Medicina Rigenerativa", "Farmacogenomica", "Sviluppo Clinico dei Farmaci Biotecnologici"],
+        5: ["Diagnostica Molecolare Avanzata", "Bioetica e Regolamentazione dei Farmaci", "Nanomedicina"]
       }
     },
-    "farmacia": {
-      name: "Farmacia (LM-13)",
+    "scienze-motorie": {
+      name: "Scienze delle Attivita Motorie e Sportive (L-22 / LM-67)",
       years: {
-        1: ["Chimica Generale e Inorganica", "Biologia Vegetale e Botanica Farmaceutica", "Anatomia Umana", "Fisica e Matematica", "Chimica Organica"],
-        2: ["Biochimica Generale e Molecolare", "Fisiologia Umana", "Microbiologia e Igiene", "Chimica Analitica"],
-        3: ["Chimica Farmaceutica I", "Farmacologia e Farmacognosia", "Patologia Generale e Fisiopatologia", "Chimica degli Alimenti"],
-        4: ["Chimica Farmaceutica II", "Tecnologia, Socioeconomia e Legislazione Farmaceutica", "Tossicologia", "Saggi e Dosaggi dei Farmaci"],
-        5: ["Chimica Computazionale", "Farmacoterapia", "Prodotti Cosmetici", "Tirocinio Professionale in Farmacia"]
+        1: ["Anatomia Umana Applicata", "Fisiologia Generale e dello Sport", "Biologia e Genetica", "Teoria e Metodologia del Movimento Umano", "Fisica e Biomeccanica"],
+        2: ["Chinesiologia e Biomeccanica del Movimento", "Teoria e Didattica degli Sport Individuali e di Squadra", "Traumatologia e Primo Soccorso", "Psicologia dello Sport", "Pedagogia del Corpo e dello Sport"],
+        3: ["Attivita Motoria Preventiva e Adattata", "Medicina dello Sport e Nutrizione", "Organizzazione e Gestione degli Impianti Sportivi", "Valutazione Funzionale dell'Atleta"],
+        4: ["Chinesiologia Compensativa e Rieducativa", "Fisiologia dell'Esercizio Avanzata", "Attivita Motoria per la Terza Eta e Disabilita"],
+        5: ["Metodologia dell'Allenamento di Alto Livello", "Nutrizione e Integrazione per lo Sport", "Management delle Societa Sportive"]
       }
     },
-    "architettura": {
-      name: "Architettura (LM-4)",
+    "scienze-servizio-sociale": {
+      name: "Servizio Sociale e Politiche Sociali (L-39 / LM-87)",
       years: {
-        1: ["Disegno e Rilievo dell'Architettura", "Storia dell'Architettura I", "Istituzioni di Matematica", "Laboratorio di Progettazione Architettonica I", "Fisica Tecnica Ambientale"],
-        2: ["Storia dell'Architettura II", "Scienza delle Costruzioni", "Laboratorio di Progettazione Architettonica II", "Geometria Descrittiva", "Tecnologia dell'Architettura"],
-        3: ["Tecnica delle Costruzioni", "Urbanistica I", "Laboratorio di Restauro Architettonico", "Laboratorio di Progettazione III", "Estimo ed Esercizio Professionale"],
-        4: ["Progettazione Urbana", "Fisica Tecnica Ambientale Avanzata", "Infrastrutture e Territorio", "Laboratorio di Sintesi Finale I"],
-        5: ["Laboratorio di Tesi e Progetto Finale", "Legislazione delle Opere Pubbliche", "Conservazione dei Beni Architettonici"]
+        1: ["Principi e Fondamenti del Servizio Sociale", "Sociologia Generale", "Istituzioni di Diritto Pubblico", "Psicologia dello Sviluppo e Sociale", "Storia Contemporanea"],
+        2: ["Metodi e Tecniche del Servizio Sociale I", "Diritto di Famiglia e dei Minori", "Sociologia della Famiglia e del Welfare", "Politica Sociale", "Psicologia Clinica"],
+        3: ["Metodi e Tecniche del Servizio Sociale II", "Diritto del Lavoro e della Sicurezza Sociale", "Organizzazione dei Servizi Sociali", "Criminologia e Devianza"],
+        4: ["Programmazione e Gestione dei Servizi Sociali", "Analisi delle Politiche Sociali Avanzate", "Mediazione Familiare e Penale"],
+        5: ["Dirigenza e Management del Terzo Settore", "Supervisione nel Servizio Sociale", "Valutazione della Qualita nei Servizi Sociali"]
       }
     },
-    "scienze-politiche": {
-      name: "Scienze Politiche e Relazioni Internazionali (L-36 / LM-62)",
+    "scienze-beni-culturali": {
+      name: "Beni Culturali e Storia dell'Arte (L-1 / LM-89)",
       years: {
-        1: ["Storia Contemporanea", "Diritto Pubblico", "Sociologia Generale", "Economia Politica", "Scienza Politica"],
-        2: ["Relazioni Internazionali", "Diritto Internazionale", "Storia delle Relazioni Internazionali", "Storia delle Dottrine Politiche", "Statistica Sociale"],
-        3: ["Diritto dell'Unione Europea", "Sociologia Politica", "Economia Internazionale", "Geopolitica e Geografia Economica"],
-        4: ["Analisi delle Politiche Pubbliche", "Geopolitica Avanzata", "Diritto Diplomatico e Consolare", "Economia dello Sviluppo"],
-        5: ["Gestione delle Crisi Internazionali", "Governance Globale", "Politica Estera Comparata"]
+        1: ["Archeologia Generale", "Storia dell'Arte Medievale", "Storia dell'Arte Moderna", "Storia Antica Greca e Romana", "Museologia e Critica d'Arte"],
+        2: ["Storia dell'Arte Contemporanea", "Archivistica e Biblioteconomia", "Legislazione dei Beni Culturali", "Geografia Culturale", "Metodologia della Ricerca Archeologica"],
+        3: ["Diagnostica e Conservazione dei Beni Culturali", "Catalogazione e Gestione del Patrimonio", "Storia delle Arti Minori", "Antropologia Culturale"],
+        4: ["Critica d'Arte Avanzata", "Gestione dei Musei e Collezionismo", "Storia dell'Architettura e del Paesaggio"],
+        5: ["Curatela di Mostre ed Eventi Culturali", "Diagnostic and Heritage Science", "Economics of Cultural Heritage"]
       }
     },
-    "lettere-moderne": {
-      name: "Lettere Moderne (L-10 / LM-14)",
+    "scienze-ambientali": {
+      name: "Scienze Ambientali e Naturali (L-32 / LM-75)",
       years: {
-        1: ["Letteratura Italiana I", "Lingua e Grammatica Italiana", "Storia Romana", "Storia Medievale", "Linguistica Generale"],
-        2: ["Letteratura Italiana II", "Storia Contemporanea", "Filologia Romanza", "Geografia Umana", "Letteratura Latina"],
-        3: ["Letteratura Italiana Contemporanea", "Crittografia e Paleografia", "Critica Letteraria e Ermeneutica", "Storia Moderna"],
-        4: ["Filologia Italiana", "Letteratura Rinascimentale", "Storia della Lingua Italiana", "Estetica Letteraria"],
-        5: ["Ermeneutica Testuale", "Letteratura Comparata Avanzata", "Didattica della Lingua Italiana"]
+        1: ["Botanica Generale e Sistemica", "Zoologia Generale", "Chimica Generale con Laboratorio", "Matematica e Fisica per l'Ambiente", "Geologia Generale"],
+        2: ["Ecologia Generale", "Chimica Ambientale", "Geomorfologia e Cartografia Ambientale", "Microbiologia Ambientale", "Mineralogia e Petrografia"],
+        3: ["Valutazione di Impatto Ambientale", "Conservazione della Natura e Biodiversita", "Diritto e Legislazione Ambientale", "Monitoraggio e Bonifica dei Siti Inquinati"],
+        4: ["Analisi e Gestione degli Ecosistemi", "Cambiamenti Climatici e Adattamento", "Modellistica Ambientale"],
+        5: ["Sostenibilita Industriale ed Economia Circolare", "Risorse Energetiche e Rinnovabili", "Gestione dei Rifiuti e delle Acque"]
       }
     },
+    "ingegneria-gestionale": {
+      name: "Ingegneria Gestionale (L-9 / LM-31)",
+      years: {
+        1: ["Analisi Matematica I", "Geometria e Algebra", "Fisica I", "Economia ed Organizzazione Aziendale", "Informatica"],
+        2: ["Analisi Matematica II", "Fisica II", "Statistica per l'Ingegneria", "Ricerca Operativa", "Scienza delle Costruzioni"],
+        3: ["Gestione della Produzione e Logistica", "Impianti Industriali", "Gestione dell'Innovazione e dei Progetti", "Marketing Industriale", "Sistemi Informativi d'Impresa"],
+        4: ["Supply Chain Management", "Gestione Finanziaria per l'Ingegneria", "Strategia Industriale", "Business Intelligence"],
+        5: ["Logistica 4.0 e Smart Factory", "Gestione del Rischio d'Impresa", "Imprenditorialita e Digital Transformation"]
+      }
+    },
+    "ingegneria-civile": {
+      name: "Ingegneria Civile ed Ambientale (L-7 / LM-23)",
+      years: {
+        1: ["Analisi Matematica I", "Geometria e Algebra Lineare", "Fisica I", "Chimica", "Disegno dell'Architettura e del Territorio"],
+        2: ["Analisi Matematica II", "Fisica II", "Meccanica Razionale", "Scienza delle Costruzioni", "Idraulica e Costruzioni Idrauliche"],
+        3: ["Tecnica delle Costruzioni", "Geotecnica e Meccanica delle Terre", "Infrastrutture Viarie e Trasporti", "Ingegneria Sanitaria Ambientale"],
+        4: ["Progettazione di Strutture in Cemento Armato e Acciaio", "Ingegneria Sismica", "Costruzioni Idrauliche Avanzate"],
+        5: ["Ponti e Grandi Strutture", "Gallerie e Opere Sotterranee", "Riqualificazione Strutturale e Sismica"]
+      }
+    },
+    "sociologia": {
+      name: "Sociologia e Ricerca Sociale (L-40 / LM-88)",
+      years: {
+        1: ["Sociologia Generale", "Storia del Pensiero Sociologico", "Metodologia della Ricerca Sociale I", "Istituzioni di Diritto Pubblico", "Statistica Sociale"],
+        2: ["Sociologia Economica e del Lavoro", "Sociologia dei Processi Culturali", "Metodologia della Ricerca Sociale II Qualitativa", "Psicologia Sociale", "Sociologia Politica"],
+        3: ["Sociologia Urbana e del Territorio", "Politiche Sociali e Welfare State", "Sociologia dei Media Digitali", "Sociologia della Devianza"],
+        4: ["Analisi dei Dati Complessi e Big Data Sociali", "Sociologia delle Organizzazioni Avanzata", "Metodi Qualitativi Avanzati"],
+        5: ["Progettazione e Valutazione delle Politiche Sociali", "Sociologia della Globalizzazione", "Etica della Ricerca Sociale"]
+      }
+    },
+    "filosofia": {
+      name: "Filosofia (L-5 / LM-78)",
+      years: {
+        1: ["Storia della Filosofia Antica", "Filosofia Teoretica", "Logica", "Letteratura Italiana", "Storia Greca"],
+        2: ["Storia della Filosofia Medievale", "Storia della Filosofia Moderna", "Estetica", "Filosofia Morale", "Antropologia Filosofica"],
+        3: ["Storia della Filosofia Contemporanea", "Filosofia del Linguaggio", "Filosofia della Scienza", "Filosofia Politica"],
+        4: ["Metafisica", "Teoria della Conoscenza", "Ermeneutica Filosofica", "Etica Applicata"],
+        5: ["Filosofia della Mente", "Filosofia della Storia", "Filosofia e Neuroscienze"]
+      }
+    },
+    "design": {
+      name: "Design e Comunicazione Visiva (L-4 / LM-12)",
+      years: {
+        1: ["Disegno Industriale I", "Storia del Design", "Laboratorio di Progettazione I", "Geometria Descrittiva", "Materiali per il Design"],
+        2: ["Disegno Industriale II", "Tecnologia dei Materiali", "Laboratorio di Progettazione II", "Ergonomia", "Storia dell'Arte Contemporanea"],
+        3: ["Design dei Servizi", "Interaction Design", "Grafica Editoriale e Brand Identity", "Modellazione Digitale CAD", "Design Sostenibile"],
+        4: ["Design Strategico e Management", "Exhibit Design", "Design per la Comunicazione Visiva", "Design della Moda"]
+      }
+    },
+    "scienze-geologiche": {
+      name: "Scienze Geologiche (L-34 / LM-74)",
+      years: {
+        1: ["Matematica", "Fisica Generale", "Chimica", "Geologia Generale e Laboratorio", "Fondamenti di Paleontologia"],
+        2: ["Mineralogia", "Petrografia", "Paleontologia Sistematica", "Geologia Strutturale", "Cartografia Geologica"],
+        3: ["Geofisica", "Idrogeologia", "Geologia Applicata", "Sedimentologia", "Geomorfologia"],
+        4: ["Rilevamento Geologico", "Geologia Regionale", "Analisi Stratigrafica", "Georisorse e Giacimenti"],
+        5: ["Geologia Tecnica e Ambientale", "Pericolosita Geologica e Rischio", "Rilevamento Geologico e Tesi"]
+      }
+    }
+  },
