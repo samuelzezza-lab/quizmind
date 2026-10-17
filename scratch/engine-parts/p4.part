@@ -1,0 +1,174 @@
+/* ============================================================
+   Quizmind — motore, parte 4 di 5
+   Aree informatiche, matematiche ed economiche: analisi
+   matematica, programmazione, basi di dati, economia politica
+   ed economia aziendale.
+   ============================================================ */
+
+EXAM_AREAS["analisi-matematica"] = {
+  name: "Analisi matematica",
+  areas: [
+    area("limiti", "Limiti e continuita", "calcolo", {
+      compute: function (rng) {
+        const a = randInt(rng, 2, 6);
+        const b = randInt(rng, 1, 5);
+        const v = Math.round((a * b) * 100) / 100;
+        return {
+          prompt: "Sia f(x) = " + a + "x. Qual e il valore del limite di f(x) per x che tende a " + b + "?",
+          value: v,
+          unit: "",
+          factor: 2,
+          decimals: 2,
+          explanation: "La funzione e continua: il limite coincide con il valore assunto in x = " + b + ", cioe " + a + " x " + b + " = " + fmt(v) + ".",
+          note: "Errore tipico: applicare la regola di de l'Hopital a una forma non indeterminata."
+        };
+      }
+    }),
+    area("derivate", "Derivate", "calcolo", {
+      compute: function (rng) {
+        const n = randInt(rng, 2, 6);
+        const a = randInt(rng, 2, 8);
+        const x0 = randInt(rng, 1, 4);
+        return {
+          prompt: "Sia f(x) = " + a + " x^" + n + ". Quanto vale la derivata prima in x = " + x0 + "?",
+          value: a * n * Math.pow(x0, n - 1),
+          unit: "",
+          factor: 2,
+          decimals: 0,
+          explanation: "La derivata e f'(x) = " + (a * n) + " x^" + (n - 1) + "; in x = " + x0 + " vale " + fmt(a * n * Math.pow(x0, n - 1)) + ".",
+          note: "Errore tipico: dimenticare di abbassare di uno l'esponente nella regola di derivazione."
+        };
+      }
+    }),
+    area("integrali", "Integrali", "calcolo", {
+      compute: function (rng) {
+        const a = randInt(rng, 1, 5);
+        const b = randInt(rng, 2, 6);
+        const v = Math.round((a * b * b / 2) * 100) / 100;
+        return {
+          prompt: "Calcola l'integrale definito di f(x) = " + a + "x da 0 a " + b + ".",
+          value: v,
+          unit: "",
+          factor: 2,
+          decimals: 2,
+          explanation: "La primitiva e " + a + "x^2/2, valutata tra 0 e " + b + " da " + fmt(v) + ".",
+          note: "Errore tipico: dimenticare il fattore 1/2 nella primitiva della funzione lineare."
+        };
+      }
+    }),
+    area("serie", "Successioni e serie", "conseguenza", {
+      consequences: [
+        { id: "geometrica", cause: "una serie geometrica ha ragione minore di uno in valore assoluto", effect: "la serie converge e la sua somma e finita" },
+        { id: "termine", cause: "il termine generale di una serie non tende a zero", effect: "la serie non puo convergere, per la condizione necessaria di convergenza" },
+        { id: "criterio", cause: "il criterio del rapporto fornisce un limite minore di uno", effect: "la serie converge assolutamente" },
+        { id: "armonica", cause: "si considera la serie armonica", effect: "la serie diverge pur avendo termine generale che tende a zero" }
+      ]
+    })
+  ]
+};
+
+EXAM_AREAS["programmazione"] = {
+  name: "Programmazione",
+  areas: [
+    area("tipi", "Tipi e variabili", "definizione", {
+      sets: [{
+        question: "Nei fondamenti della programmazione,",
+        items: [
+          { id: "int", label: "il tipo intero", text: "il tipo che rappresenta numeri senza parte frazionaria, con intervallo di valori limitato dalla memoria" },
+          { id: "float", label: "il tipo in virgola mobile", text: "il tipo che rappresenta numeri con parte frazionaria, con precisione limitata" },
+          { id: "char", label: "il tipo carattere", text: "il tipo che rappresenta un singolo simbolo, memorizzato come codice numerico" },
+          { id: "bool", label: "il tipo booleano", text: "il tipo che ammette solo i due valori vero e falso" }
+        ]
+      }]
+    }),
+    area("complessita", "Complessita algoritmica", "conseguenza", {
+      consequences: [
+        { id: "lineare", cause: "un algoritmo esamina ogni elemento dell'input una sola volta", effect: "la sua complessita temporale e lineare, proporzionale alla dimensione dell'input" },
+        { id: "quadratico", cause: "un algoritmo contiene due cicli annidati sull'intero input", effect: "la sua complessita temporale e quadratica, con crescita rapida all'aumentare dell'input" },
+        { id: "logaritmo", cause: "un algoritmo dimezza lo spazio di ricerca a ogni passo", effect: "la sua complessita temporale e logaritmica" },
+        { id: "ordinamento", cause: "un algoritmo deve ordinare una lista confrontando elementi", effect: "il limite inferiore per gli ordinamenti basati su confronti e di ordine n log n" }
+      ]
+    }),
+    area("strutture", "Strutture dati", "classificazione", {
+      classes: [
+        { id: "lineari", label: "strutture dati lineari", members: ["la lista", "la coda", "la pila"] },
+        { id: "alberi", label: "strutture ad albero", members: ["l'albero binario di ricerca", "il heap"] },
+        { id: "hash", label: "tabelle a indirizzamento diretto", members: ["la tabella hash", "l'insieme con accesso per chiave"] },
+        { id: "grafi", label: "strutture a grafo", members: ["la lista di adiacenza", "la matrice di adiacenza"] }
+      ]
+    }),
+    area("ricorsione", "Ricorsione", "calcolo", {
+      compute: function (rng) {
+        const n = randInt(rng, 3, 7);
+        let f = 1;
+        for (let i = 2; i <= n; i++) f *= i;
+        return {
+          prompt: "Definita ricorsivamente F(0) = 1 e F(a) = a x F(a-1), quanto vale F(" + n + ")?",
+          value: f,
+          unit: "",
+          factor: 2,
+          decimals: 0,
+          explanation: "La definizione calcola il fattoriale: F(" + n + ") = " + n + "! = " + fmt(f) + ".",
+          note: "Errore tipico: dimenticare il caso base e generare una ricorsione infinita."
+        };
+      }
+    })
+  ]
+};
+
+EXAM_AREAS["basi-di-dati"] = {
+  name: "Basi di dati",
+  areas: [
+    area("modello", "Modello relazionale", "definizione", {
+      sets: [{
+        question: "Nel modello relazionale dei dati,",
+        items: [
+          { id: "chiave", label: "la chiave primaria", text: "l'attributo che identifica in modo univoco ogni riga della tabella" },
+          { id: "esterna", label: "la chiave esterna", text: "l'attributo che riferisce la chiave primaria di un'altra tabella, collegando le relazioni" },
+          { id: "indice", label: "l'indice", text: "la struttura ausiliaria che accelera la ricerca su un attributo a costo di spazio aggiuntivo" },
+          { id: "vincolo", label: "il vincolo di integrita", text: "la condizione che ogni riga deve rispettare per mantenere i dati coerenti" }
+        ]
+      }]
+    }),
+    area("sql", "Linguaggio SQL", "regola-caso", {
+      cases: [
+        function () {
+          return {
+            prompt: "Qual e la differenza tra WHERE e HAVING in una query SQL?",
+            correct: "WHERE filtra le righe prima dell'aggregazione, HAVING filtra i gruppi dopo l'aggregazione",
+            distractors: [
+              "WHERE si usa solo con INNER JOIN, HAVING solo con OUTER JOIN",
+              "HANVING sostituisce WHERE quando la tabella supera un milione di righe",
+              "sono intercambiabili e la scelta dipende solo dallo stile del programmatore"
+            ],
+            note: "Errore tipico: usare WHERE su una funzione di aggregazione, che invece richiede HAVING."
+          };
+        }
+      ]
+    }),
+    area("normalizzazione", "Normalizzazione", "conseguenza", {
+      consequences: [
+        { id: "prima", cause: "una tabella contiene gruppi di valori ripetuti nella stessa colonna", effect: "non e in prima forma normale e va scomposta in piu righe" },
+        { id: "seconda", cause: "un attributo non chiave dipende solo da una parte della chiave composta", effect: "esiste una dipendenza parziale e la tabella non e in seconda forma normale" },
+        { id: "terza", cause: "un attributo non chiave dipende da un altro attributo non chiave", effect: "esiste una dipendenza transitiva e la tabella non e in terza forma normale" },
+        { id: "ridondanza", cause: "la normalizzazione non viene applicata", effect: "si producono ridondanze e anomalie di aggiornamento sui dati" }
+      ]
+    }),
+    area("transazioni", "Transazioni e concorrenza", "regola-caso", {
+      cases: [
+        function () {
+          return {
+            prompt: "Che cosa garantisce la proprieta di atomicita di una transazione?",
+            correct: "che tutte le operazioni della transazione siano eseguite o nessuna, senza stati intermedi visibili",
+            distractors: [
+              "che la transazione venga eseguita nel minor tempo possibile",
+              "che i dati siano cifrati durante la scrittura",
+              "che la transazione sia sempre confermata anche in caso di errore"
+            ],
+            note: "Errore tipico: confondere l'atomicita con la durabilita o la consistenza."
+          };
+        }
+      ]
+    })
+  ]
+};
