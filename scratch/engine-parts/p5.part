@@ -1,0 +1,450 @@
+/* ============================================================
+   Quizmind — motore, parte 5 di 5
+   Aree economiche, alias degli esami, indice finale, copertura,
+   generazione della sessione da 10 domande e correzione.
+   ============================================================ */
+
+EXAM_AREAS["economia-politica"] = {
+  name: "Economia politica",
+  areas: [
+    area("domanda", "Domanda e offerta", "conseguenza", {
+      consequences: [
+        { id: "prezzo", cause: "la domanda di un bene aumenta a parita di offerta", effect: "il prezzo di equilibrio tende a salire e la quantita scambiata ad aumentare" },
+        { id: "offerta", cause: "l'offerta di un bene aumenta a parita di domanda", effect: "il prezzo di equilibrio tende a scendere e la quantita scambiata ad aumentare" },
+        { id: "elasticita", cause: "la domanda e elastica rispetto al prezzo", effect: "una variazione del prezzo produce una variazione piu che proporzionale della quantita domandata" },
+        { id: "tetto", cause: "si fissa un prezzo massimo inferiore al prezzo di equilibrio", effect: "si genera una penuria, con eccesso di domanda rispetto all'offerta" }
+      ]
+    }),
+    area("pil", "Contabilita nazionale", "calcolo", {
+      compute: function (rng) {
+        const c = randInt(rng, 400, 900);
+        const i = randInt(rng, 100, 300);
+        const g = randInt(rng, 100, 300);
+        const pil = c + i + g;
+        return {
+          prompt: "In un sistema chiuso agli scambi con l'estero, i consumi valgono " + c + ", gli investimenti " + i + " e la spesa pubblica " + g + " (milioni di euro). Qual e il PIL?",
+          value: pil,
+          unit: "milioni di euro",
+          factor: 2,
+          decimals: 0,
+          explanation: "In economia chiusa il PIL e la somma di consumi, investimenti e spesa pubblica: " + c + " + " + i + " + " + g + " = " + fmt(pil) + ".",
+          note: "Errore tipico: includere le esportazioni nette in un sistema chiuso agli scambi."
+        };
+      }
+    }),
+    area("inflazione", "Inflazione e indici", "calcolo", {
+      compute: function (rng) {
+        const p1 = randInt(rng, 100, 140);
+        const p0 = randInt(rng, 80, 99);
+        const tasso = Math.round(((p1 - p0) / p0) * 10000) / 100;
+        return {
+          prompt: "L'indice dei prezzi passa da " + p0 + " a " + p1 + ". Qual e il tasso di inflazione in percentuale? (2 decimali)",
+          value: tasso,
+          unit: "%",
+          factor: 2,
+          decimals: 2,
+          explanation: "Il tasso e (p1 - p0)/p0 x 100 = (" + p1 + " - " + p0 + ")/" + p0 + " x 100 = " + fmt(tasso) + "%.",
+          note: "Errore tipico: dividere la differenza per l'indice finale invece che per quello iniziale."
+        };
+      }
+    }),
+    area("mercati", "Forme di mercato", "classificazione", {
+      classes: [
+        { id: "concorrenza", label: "concorrenza perfetta", members: ["un mercato con molti venditori di un bene omogeneo"] },
+        { id: "monopolio", label: "monopolio", members: ["un mercato con un solo venditore e barriere all'entrata"] },
+        { id: "oligopolio", label: "oligopolio", members: ["un mercato con pochi venditori interdipendenti"] },
+        { id: "concorrenza-monopolistica", label: "concorrenza monopolistica", members: ["un mercato con molti venditori di prodotti differenziati"] }
+      ]
+    })
+  ]
+};
+
+EXAM_AREAS["economia-aziendale"] = {
+  name: "Economia aziendale",
+  areas: [
+    area("bilancio", "Bilancio e patrimonio", "calcolo", {
+      compute: function (rng) {
+        const attivo = randInt(rng, 200, 900);
+        const passivo = randInt(rng, 100, 400);
+        const patrimonio = attivo - passivo;
+        return {
+          prompt: "Un'impresa ha attivo per " + attivo + " e passivita per " + passivo + " (migliaia di euro). Qual e il patrimonio netto?",
+          value: patrimonio,
+          unit: "migliaia di euro",
+          factor: 2,
+          decimals: 0,
+          explanation: "Il patrimonio netto e la differenza tra attivo e passivita: " + attivo + " - " + passivo + " = " + fmt(patrimonio) + ".",
+          note: "Errore tipico: sommare attivo e passivita invece di sottrarre."
+        };
+      }
+    }),
+    area("indici", "Indici di redditivita", "calcolo", {
+      compute: function (rng) {
+        const utile = randInt(rng, 10, 90);
+        const ricavi = randInt(rng, 200, 900);
+        const ros = Math.round((utile / ricavi) * 10000) / 100;
+        return {
+          prompt: "Un'impresa ha ricavi per " + ricavi + " e utile di " + utile + " (migliaia di euro). Qual e il margine di utile sui ricavi in percentuale? (2 decimali)",
+          value: ros,
+          unit: "%",
+          factor: 2,
+          decimals: 2,
+          explanation: "Il margine e utile/ricavi x 100 = " + utile + "/" + ricavi + " x 100 = " + fmt(ros) + "%.",
+          note: "Errore tipico: invertire il rapporto, dividendo i ricavi per l'utile."
+        };
+      }
+    }),
+    area("costi", "Costi e break even", "calcolo", {
+      compute: function (rng) {
+        const fissi = randInt(rng, 1000, 9000);
+        const margine = randInt(rng, 10, 40);
+        const bep = Math.ceil(fissi / margine);
+        return {
+          prompt: "Un'impresa ha costi fissi per " + fmt(fissi) + " euro e margine di contribuzione unitario di " + margine + " euro. Quante unita deve vendere per coprire i costi fissi?",
+          value: bep,
+          unit: "unita",
+          factor: 2,
+          decimals: 0,
+          explanation: "Il punto di pareggio e costi fissi / margine unitario = " + fmt(fissi) + " / " + margine + " = " + fmt(bep) + " unita.",
+          note: "Errore tipico: moltiplicare costi fissi e margine invece di dividere."
+        };
+      }
+    }),
+    area("gestione", "Gestione aziendale", "conseguenza", {
+      consequences: [
+        { id: "liquidita", cause: "l'impresa ha crediti rilevanti e scorte elevate", effect: "la liquidita e assorbita nel capitale circolante, con tensione finanziaria" },
+        { id: "ammortamento", cause: "si acquista un impianto pluriennale", effect: "il costo viene ripartito negli esercizi attraverso l'ammortamento" },
+        { id: "autofinanziamento", cause: "l'impresa non distribuisce tutto l'utile", effect: "si genera autofinanziamento che rafforza il patrimonio netto" },
+        { id: "indebitamento", cause: "l'impresa ricorre a nuovo debito bancario", effect: "aumentano gli oneri finanziari e il rapporto di indebitamento" }
+      ]
+    })
+  ]
+};
+
+/* ============================================================
+   ALIAS E INDICE DELLE AREE
+   Le aree specifiche hanno priorita sugli alias: un esame con
+   aree proprie non viene coperto da una materia affine.
+   ============================================================ */
+const EXAM_ALIASES = {
+  "diritto-pubblico": ["diritto-costituzionale"],
+  "diritto-costituzionale-avanzato": ["diritto-costituzionale"],
+  "istituzioni-di-diritto-romano": ["diritto-privato"],
+  "diritto-civile": ["diritto-privato"],
+  "diritto-commerciale": ["diritto-privato"],
+  "diritto-del-lavoro": ["diritto-privato"],
+  "diritto-di-famiglia": ["diritto-privato"],
+  "diritto-processuale-civile": ["diritto-privato"],
+  "diritto-processuale-penale": ["diritto-penale"],
+  "diritto-penale-avanzato": ["diritto-penale"],
+  "chimica-generale": ["chimica"],
+  "chimica-organica": ["chimica"],
+  "chimica-analitica": ["chimica"],
+  "chimica-farmaceutica": ["chimica"],
+  "chimica-fisica": ["chimica"],
+  "chimica-inorganica": ["chimica"],
+  "fisiologia-avanzata": ["fisiologia"],
+  "fisiologia-dellesercizio": ["fisiologia"],
+  "fisiologia-vegetale": ["fisiologia"],
+  "anatomia-avanzata": ["anatomia"],
+  "citologia": ["istologia"],
+  "biologia-generale": ["istologia"],
+  "biologia-molecolare": ["biochimica"],
+  "genetica": ["biochimica"],
+  "genetica-medica": ["biochimica"],
+  "microbiologia": ["istologia"],
+  "patologia-generale": ["fisiologia"],
+  "statistica-economica": ["statistica"],
+  "statistica-inferenziale": ["statistica"],
+  "probabilita": ["statistica"],
+  "algebra-lineare": ["analisi-matematica"],
+  "geometria": ["analisi-matematica"],
+  "matematica-generale": ["analisi-matematica"],
+  "analisi-matematica-2": ["analisi-matematica"],
+  "analisi-numerica": ["analisi-matematica"],
+  "fisica-generale": ["statistica"],
+  "fisica-medica": ["statistica"],
+  "informatica": ["programmazione"],
+  "algoritmi": ["programmazione"],
+  "architettura-degli-elaboratori": ["programmazione"],
+  "sistemi-operativi": ["programmazione"],
+  "ingegneria-del-software": ["programmazione"],
+  "reti-di-calcolatori": ["programmazione"],
+  "microeconomia": ["economia-politica"],
+  "macroeconomia": ["economia-politica"],
+  "econometria": ["economia-politica"],
+  "ragioneria-generale": ["economia-aziendale"],
+  "ragioneria": ["economia-aziendale"],
+  "marketing": ["economia-aziendale"],
+  "organizzazione-aziendale": ["economia-aziendale"],
+  "psicologia-generale": ["fisiologia"],
+  "psicologia-sociale": ["fisiologia"],
+  "psicologia-dello-sviluppo": ["fisiologia"],
+  "neurofisiologia": ["fisiologia"],
+  "psicometria": ["statistica"]
+};
+
+const AREA_INDEX = {};
+
+for (const slug of Object.keys(EXAM_AREAS)) {
+  AREA_INDEX[slug] = EXAM_AREAS[slug];
+}
+
+registraAree(AREA_INDEX);
+
+for (const slug of Object.keys(EXAM_ALIASES)) {
+  if (AREA_INDEX[slug]) continue;
+  const sorgente = EXAM_ALIASES[slug];
+  for (let i = 0; i < sorgente.length; i++) {
+    if (AREA_INDEX[sorgente[i]]) {
+      AREA_INDEX[slug] = {
+        name: AREA_INDEX[sorgente[i]].name,
+        areas: AREA_INDEX[sorgente[i]].areas,
+        aliasOf: sorgente[i]
+      };
+      break;
+    }
+  }
+}
+
+/* ============================================================
+   COPERTURA
+   ============================================================ */
+function examCoverage(slug) {
+  const def = AREA_INDEX[slug];
+  const aree = def ? def.areas.length : 0;
+  return {
+    available: aree >= MIN_AREAS,
+    areas: aree,
+    templates: aree,
+    minRequired: MIN_AREAS,
+    aliasOf: def && def.aliasOf ? def.aliasOf : null
+  };
+}
+
+function planDistribution(areaCount, total) {
+  const plan = [];
+  let i = 0;
+  while (plan.length < total) {
+    plan.push(i % areaCount);
+    i++;
+  }
+  return plan;
+}
+
+/* ============================================================
+   GENERAZIONE DELLA SESSIONE — esattamente 10 domande
+   ============================================================ */
+function buildQuestion(rng, areaDef, examSlug) {
+  for (let attempt = 0; attempt < 12; attempt++) {
+    const gen = GENERATORS[areaDef.kind];
+    if (!gen) return null;
+
+    let built;
+    try {
+      built = gen(rng, areaDef.spec);
+    } catch (e) {
+      continue;
+    }
+    if (!built) continue;
+
+    if (built.numeric) {
+      const num = buildNumericOptions(built.numeric.value, {
+        unit: built.numeric.unit,
+        factor: built.numeric.factor,
+        decimals: built.numeric.decimals
+      });
+      if (!validateOptions(num.options)) continue;
+      const testi = num.options.map(function (o) { return o.text; });
+      const mescolati = shuffleFisherYates(rng, testi);
+      return {
+        kind: areaDef.kind,
+        areaId: areaDef.id,
+        areaName: areaDef.name,
+        examName: examSlug,
+        prompt: built.prompt,
+        options: mescolati,
+        correctIndex: mescolati.indexOf(num.options[0].text),
+        correct_answer: num.options[0].text,
+        distractors: num.distractors,
+        explanation: built.explanation,
+        errorNote: built.errorNote,
+        distractorNotes: num.distractors
+      };
+    }
+
+    if (!validateOptions(built.options)) continue;
+    const corretta = built.options.filter(function (o) { return o.correct; })[0].text;
+    const testi = built.options.map(function (o) { return o.text; });
+    const mescolati = shuffleFisherYates(rng, testi);
+    return {
+      kind: areaDef.kind,
+      areaId: areaDef.id,
+      areaName: areaDef.name,
+      examName: examSlug,
+      prompt: built.prompt,
+      options: mescolati,
+      correctIndex: mescolati.indexOf(corretta),
+      correct_answer: corretta,
+      distractors: testi.filter(function (t) { return t !== corretta; }),
+      explanation: built.explanation || null,
+      errorNote: built.errorNote,
+      distractorNotes: built.options.filter(function (o) { return !o.correct; }).map(function (o) { return o.why; })
+    };
+  }
+  return null;
+}
+
+function generateSession(slug, seed) {
+  const def = AREA_INDEX[slug];
+  if (!def || def.areas.length < MIN_AREAS) {
+    return {
+      ok: false,
+      reason: def ? "copertura" : "materia-non-coperta",
+      examSlug: slug,
+      coverage: def ? def.areas.length : 0,
+      minRequired: MIN_AREAS
+    };
+  }
+
+  const rng = createRng(seed);
+  const plan = planDistribution(def.areas.length, QUESTIONS_PER_SESSION);
+  const questions = [];
+  const seenPrompts = {};
+  const usedAreaCount = {};
+  let ripetizioniScartate = 0;
+
+  for (let i = 0; i < plan.length; i++) {
+    const areaDef = def.areas[plan[i]];
+    const prevKind = questions.length ? questions[questions.length - 1].kind : null;
+
+    let placed = null;
+    for (let attempt = 0; attempt < 14; attempt++) {
+      const cand = buildQuestion(rng, areaDef, slug);
+      if (!cand) continue;
+      if (seenPrompts[cand.prompt]) { ripetizioniScartate++; continue; }
+      if (prevKind && cand.kind === prevKind) { ripetizioniScartate++; continue; }
+      seenPrompts[cand.prompt] = true;
+      placed = cand;
+      break;
+    }
+
+    if (!placed) {
+      const lastKind = questions.length ? questions[questions.length - 1].kind : null;
+      for (let k = 0; k < def.areas.length; k++) {
+        const alt = def.areas[k];
+        if (alt.kind === lastKind) continue;
+        const cand = buildQuestion(rng, alt, slug);
+        if (cand && !seenPrompts[cand.prompt]) {
+          seenPrompts[cand.prompt] = true;
+          placed = cand;
+          break;
+        }
+      }
+    }
+
+    if (placed) {
+      usedAreaCount[placed.areaId] = (usedAreaCount[placed.areaId] || 0) + 1;
+      questions.push({
+        id: slug + "-q" + (questions.length + 1),
+        number: questions.length + 1,
+        areaId: placed.areaId,
+        areaName: placed.areaName,
+        kind: placed.kind,
+        prompt: placed.prompt,
+        options: placed.options,
+        correctIndex: placed.correctIndex,
+        correct_answer: placed.correct_answer,
+        distractors: placed.distractors,
+        explanation: placed.explanation,
+        errorNote: placed.errorNote,
+        distractorNotes: placed.distractorNotes
+      });
+    }
+  }
+
+  if (questions.length !== QUESTIONS_PER_SESSION) {
+    return { ok: false, reason: "generation", examSlug: slug, generated: questions.length };
+  }
+
+  return {
+    ok: true,
+    examSlug: slug,
+    examName: def.name,
+    aliasOf: def.aliasOf || null,
+    seed: seed,
+    total: QUESTIONS_PER_SESSION,
+    questions: questions,
+    areaCount: Object.keys(usedAreaCount).length,
+    repeatsDiscarded: ripetizioniScartate,
+    distribution: usedAreaCount
+  };
+}
+
+function gradeSession(session, answers) {
+  let score = 0;
+  const detail = session.questions.map(function (q, i) {
+    const given = answers[i];
+    const correct = given === q.correctIndex;
+    if (correct) score++;
+    return {
+      number: i + 1,
+      area: q.areaName,
+      prompt: q.prompt,
+      givenIndex: given === undefined ? null : given,
+      givenText: given === undefined || given === null ? null : q.options[given],
+      correctIndex: q.correctIndex,
+      correctText: q.options[q.correctIndex],
+      correct: correct,
+      explanation: q.explanation,
+      errorNote: q.errorNote
+    };
+  });
+
+  const areaNames = [];
+  detail.forEach(function (d) { if (areaNames.indexOf(d.area) < 0) areaNames.push(d.area); });
+
+  return {
+    score: score,
+    total: session.total,
+    percentage: Math.round((score / session.total) * 100),
+    detail: detail,
+    byArea: areaNames.map(function (a) {
+      const items = detail.filter(function (d) { return d.area === a; });
+      return { area: a, correct: items.filter(function (d) { return d.correct; }).length, total: items.length };
+    })
+  };
+}
+
+/* Stima trasparente: dipende dalle aree, dagli schemi per area e
+   dall'ampiezza dei parametri. Nessun valore infinito. */
+function variantEstimate(slug) {
+  const def = AREA_INDEX[slug];
+  if (!def) return 0;
+  let schemi = 0;
+  def.areas.forEach(function (a) {
+    if (a.spec.sets) schemi += a.spec.sets.length * 4;
+    if (a.spec.cases) schemi += a.spec.cases.length;
+    if (a.spec.consequences) schemi += a.spec.consequences.length;
+    if (a.spec.sequences) schemi += a.spec.sequences.length;
+    if (a.spec.classes) schemi += a.spec.classes.length;
+    if (a.spec.compute) schemi += 12;
+  });
+  if (!schemi) return 0;
+  return Math.round(Math.pow(schemi * 6, 1.5));
+}
+
+export {
+  QUESTIONS_PER_SESSION,
+  MIN_AREAS,
+  GENERATORS,
+  EXAM_AREAS,
+  AREA_INDEX,
+  createRng,
+  shuffleFisherYates,
+  examCoverage,
+  planDistribution,
+  generateSession,
+  gradeSession,
+  variantEstimate
+};
