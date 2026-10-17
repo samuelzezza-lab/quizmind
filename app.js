@@ -1,11 +1,16 @@
 /* ============================================================
    Quizmind — Logica applicativa
-   Flusso: corso di laurea -> anno -> esame -> sessione da
-   10 domande -> correzione -> revisione.
-   Nessuna università specifica: solo corsi di laurea.
+   ------------------------------------------------------------
+   Percorso: ateneo -> facoltà -> anno di corso -> esame ->
+   sessione da 10 domande -> correzione -> revisione.
+
+   Il motore genera le domande attraverso la factory a tre step
+   (quiz/engine.js): sottocategorie obbligatorie, finestra mobile
+   anti-ripetizione e distrattori dinamici.
    ============================================================ */
 
-import { DEGREES, findDegree, examSlug, catalogStats } from "./data/degrees.js";
+import { UNIVERSITIES, universitiesByArea, findUniversity } from "./data/universities.js";
+import { FACULTIES_CATALOG, examSlug, catalogStats } from "./data/faculties.js";
 import {
   examCoverage,
   generateSession,
@@ -16,7 +21,9 @@ import {
 
 /* ------------------------- STATO -------------------------- */
 const state = {
-  degree: null,
+  university: null,
+  facultyId: null,
+  faculty: null,
   year: null,
   exam: null,
   session: null,
@@ -38,9 +45,11 @@ function el(tag, className, text) {
   return n;
 }
 
-const LETTERS = ["A", "B", "C", "D", "E"];
+const LETTERS = ["A", "B", "C", "D"];
 
-/* --------------------- CONTATORE LOCALE ------------------- */
+/* --------------------- CONTATORE SESSIONI ----------------- */
+/* Il conteggio vive nel browser: vale come misura di cortesia,
+   non come limite opponibile. L'interfaccia lo dichiara. */
 function todayKey() {
   const d = new Date();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -54,30 +63,33 @@ function readUsage() {
     if (!raw) return { date: todayKey(), count: 0 };
     const parsed = JSON.parse(raw);
     if (parsed.date !== todayKey()) return { date: todayKey(), count: 0 };
-    return parsed;
+    return { date: parsed.date, count: Number(parsed.count) || 0 };
   } catch {
     return { date: todayKey(), count: 0 };
   }
 }
 
 function writeUsage(usage) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(usage)); } catch { /* ignorato */ }
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(usage)); } catch { /* storage non disponibile */ }
+}
+
+function sessionsLeft() {
+  return Math.max(0, FREE_SESSIONS_PER_DAY - readUsage().count);
 }
 
 function renderSessionCounter() {
-  const usage = readUsage();
-  const left = Math.max(0, FREE_SESSIONS_PER_DAY - usage.count);
   const node = $("#session-counter");
   if (!node) return;
+  const left = sessionsLeft();
   node.innerHTML = `Sessioni gratuite oggi: <strong>${left} / ${FREE_SESSIONS_PER_DAY}</strong>`;
 }
 
 /* --------------------- SELEZIONE PERCORSO ----------------- */
 function fillSelect(select, items, placeholder) {
   select.innerHTML = "";
-  const opt = el("option", null, placeholder);
-  opt.value = "";
-  select.appendChild(opt);
+  const ph = el("option", null, placeholder);
+  ph.value = "";
+  select.appendChild(ph);
   for (const it of items) {
     const o = el("option", null, it.label);
     o.value = it.value;
@@ -86,52 +98,85 @@ function fillSelect(select, items, placeholder) {
   select.disabled = items.length === 0;
 }
 
+function fillGroupedSelect(select, groups, placeholder) {
+  select.innerHTML = "";
+  const ph = el("option", null, placeholder);
+  ph.value = "";
+  select.appendChild(ph);
+  for (const g of groups) {
+    const group = document.createElement("optgroup");
+    group.label = g.label;
+    for (const it of g.items) {
+      const o = el("option", null, it.label);
+      o.value = it.value;
+      group.appendChild(o);
+    }
+    select.appendChild(group);
+  }
+  select.disabled = groups.length === 0;
+}
+
+/* Facoltà del catalogo, in ordine alfabetico. */
+function facultyItems() {
+  return Object.entries(FACULTIES_CATALOG)
+    .map(([id, f]) => ({ value: id, label: `${f.name} — ${f.duration} anni`, name: f.name }))
+    .sort((a, b) => a.name.localeCompare(b.name, "it"));
+}
+
 function initSelectors() {
-  const degSel = $("#sel-degree");
+  const uniSel = $("#sel-university");
+  const facSel = $("#sel-faculty");
   const yearSel = $("#sel-year");
   const examSel = $("#sel-exam");
 
-  /* Raggruppa i corsi per area disciplinare. */
-  const areas = [...new Set(DEGREES.map(d => d.area))];
-  degSel.innerHTML = "";
-  const ph = el("option", null, "Seleziona il corso di laurea");
-  ph.value = "";
-  degSel.appendChild(ph);
-  for (const area of areas) {
-    const group = document.createElement("optgroup");
-    group.label = area;
-    for (const d of DEGREES.filter(x => x.area === area)) {
-      const o = el("option", null, `${d.name} — ${d.class}`);
-      o.value = d.id;
-      group.appendChild(o);
-    }
-    degSel.appendChild(group);
-  }
-  degSel.disabled = false;
+  const byArea = universitiesByArea();
+  fillGroupedSelect(
+    uniSel,
+    Object.keys(byArea).map(area => ({
+      label: area,
+      items: byArea[area].map(u => ({ value: u.id, label: u.name }))
+    })),
+    "Seleziona l'ateneo"
+  );
 
-  fillSelect(yearSel, [], "Seleziona prima il corso");
+  fillSelect(facSel, [], "Seleziona prima l'ateneo");
+  fillSelect(yearSel, [], "Seleziona prima la facoltà");
   fillSelect(examSel, [], "Seleziona prima l'anno");
 
-  degSel.addEventListener("change", () => {
-    const deg = findDegree(degSel.value);
-    state.degree = deg || null;
+  uniSel.addEventListener("change", () => {
+    state.university = findUniversity(uniSel.value);
+    fillGroupedSelect(
+      facSel,
+      state.university ? [{ label: "Facoltà del catalogo", items: facultyItems() }] : [],
+      "Seleziona la facoltà"
+    );
+    fillSelect(yearSel, [], "Seleziona prima la facoltà");
+    fillSelect(examSel, [], "Seleziona prima l'anno");
+    state.faculty = state.facultyId = state.year = state.exam = null;
+    renderExamSummary();
+  });
+
+  facSel.addEventListener("change", () => {
+    const f = FACULTIES_CATALOG[facSel.value] || null;
+    state.faculty = f;
+    state.facultyId = facSel.value || null;
+    const years = f ? Object.keys(f.years).map(Number).sort((a, b) => a - b) : [];
     fillSelect(
       yearSel,
-      deg ? deg.years.map(y => ({ value: String(y.year), label: `${y.year}° anno` })) : [],
+      years.map(y => ({ value: String(y), label: `${y}° anno` })),
       "Seleziona l'anno di corso"
     );
     fillSelect(examSel, [], "Seleziona prima l'anno");
-    state.exam = null;
+    state.year = state.exam = null;
     renderExamSummary();
   });
 
   yearSel.addEventListener("change", () => {
-    const deg = state.degree;
-    const y = deg?.years.find(x => String(x.year) === yearSel.value) || null;
-    state.year = y;
+    const list = state.faculty ? state.faculty.years[yearSel.value] : null;
+    state.year = yearSel.value || null;
     fillSelect(
       examSel,
-      y ? y.exams.map(e => ({ value: e.id, label: `${e.name} (${e.ssd})` })) : [],
+      list ? list.map(name => ({ value: name, label: name })) : [],
       "Seleziona l'esame"
     );
     state.exam = null;
@@ -139,7 +184,7 @@ function initSelectors() {
   });
 
   examSel.addEventListener("change", () => {
-    state.exam = state.year?.exams.find(e => e.id === examSel.value) || null;
+    state.exam = examSel.value || null;
     renderExamSummary();
   });
 }
@@ -150,14 +195,17 @@ function renderExamSummary() {
   if (!box) return;
   box.innerHTML = "";
 
+  const startBtn = $("#btn-start");
+
   if (!state.exam) {
     box.className = "empty";
     box.appendChild(el("p", "empty__title", "Nessun esame selezionato"));
-    box.appendChild(el("p", null, "Completa i tre menu qui sopra per vedere la copertura del motore."));
+    box.appendChild(el("p", null, "Completa i quattro menu qui sopra per vedere la copertura del motore."));
+    if (startBtn) startBtn.disabled = true;
     return;
   }
 
-  const slug = examSlug(state.exam.id);
+  const slug = examSlug(state.exam);
   const cov = examCoverage(slug);
   const variants = variantEstimate(slug);
   box.className = "";
@@ -166,11 +214,11 @@ function renderExamSummary() {
   const left = el("div");
 
   left.appendChild(el("div", "exam-summary__path",
-    `${state.degree.name} (${state.degree.class}) · ${state.year.year}° anno · ${state.degree.area}`));
-  left.appendChild(el("div", "exam-summary__name", state.exam.name));
+    `${state.university.name} · ${state.faculty.name} · ${state.year}° anno`));
+  left.appendChild(el("div", "exam-summary__name", state.exam));
 
   const meta = el("div", "exam-summary__meta");
-  meta.appendChild(el("span", "badge badge--info", state.exam.ssd));
+  meta.appendChild(el("span", "badge badge--info", `${state.faculty.duration} anni di corso`));
   meta.appendChild(el("span",
     cov.available ? "badge badge--verified" : "badge badge--pending",
     cov.available ? "Motore pronto" : "Motore in preparazione"));
@@ -178,13 +226,11 @@ function renderExamSummary() {
 
   const right = el("div");
   const covWrap = el("div", "coverage");
-
-  const stats = [
-    [String(cov.templates), "Template attivi"],
+  for (const [value, label] of [
+    [String(cov.templates), "Aree del programma"],
     [String(QUESTIONS_PER_SESSION), "Domande a sessione"],
     [variants ? variants.toLocaleString("it-IT") : "—", "Varianti stimate"]
-  ];
-  for (const [value, label] of stats) {
+  ]) {
     const item = el("div", "coverage__item");
     item.appendChild(el("div", "coverage__value num", value));
     item.appendChild(el("div", "coverage__label", label));
@@ -192,12 +238,17 @@ function renderExamSummary() {
   }
   right.appendChild(covWrap);
 
-  if (!cov.available) {
+  if (cov.available) {
+    const tags = el("div", "exam-summary__meta");
+    tags.style.marginTop = "0.6rem";
+    for (const a of cov.areas) tags.appendChild(el("span", "badge badge--info", a.name));
+    right.appendChild(tags);
+  } else {
     const n = el("div", "notice notice--warning");
     n.textContent =
-      `Questo esame dispone di ${cov.templates} template su ${cov.minRequired} necessari. ` +
-      `Il motore non genera la sessione per evitare di riproporre le stesse domande: ` +
-      `i template vanno aggiunti in quiz/engine.js.`;
+      `Questo esame dispone di ${cov.templates} aree su ${cov.minRequired} necessarie. ` +
+      `Il motore non genera la sessione invece di riproporre le stesse domande: ` +
+      `le aree vanno aggiunte in quiz/engine.js.`;
     right.appendChild(n);
   }
 
@@ -205,10 +256,10 @@ function renderExamSummary() {
   wrapEl.appendChild(right);
   box.appendChild(wrapEl);
 
-  const startBtn = $("#btn-start");
   if (startBtn) startBtn.disabled = !cov.available;
 }
 
+/* --------------------------- QUIZ ------------------------- */
 function startSession() {
   if (!state.exam) return;
 
@@ -218,12 +269,12 @@ function startSession() {
     return;
   }
 
-  const slug = examSlug(state.exam.id);
+  const slug = examSlug(state.exam);
   const seed = (Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0;
   const session = generateSession(slug, seed);
 
   if (!session.ok) {
-    renderUnsupportedScreen(slug, session);
+    renderUnsupportedScreen(session);
     return;
   }
 
@@ -233,7 +284,7 @@ function startSession() {
   state.graded = false;
 
   usage.count += 1;
-  writeUsage(usage);
+  writeUsage({ date: todayKey(), count: usage.count });
   renderSessionCounter();
 
   renderQuestion();
@@ -245,12 +296,14 @@ function renderLimitScreen(usage) {
   const panel = el("section", "panel");
   panel.appendChild(el("div", "panel__title", "Limite giornaliero raggiunto"));
   panel.appendChild(el("div", "panel__desc",
-    `Hai utilizzato ${usage.count} sessioni oggi. Il limite di ${FREE_SESSIONS_PER_DAY} sessioni ` +
-    `gratuite si azzera a mezzanotte, ora locale.`));
+    `Hai utilizzato ${usage.count} sessioni oggi. Il limite di ${FREE_SESSIONS_PER_DAY} ` +
+    `sessioni gratuite si azzera a mezzanotte, ora locale.`));
+
   const n = el("div", "notice notice--warning");
   n.textContent =
-    "Nota tecnica: in questa fase il conteggio è memorizzato nel browser e non è quindi " +
-    "verificabile lato server. Un limite opponibile richiede autenticazione e database.";
+    "Il conteggio è memorizzato nel browser e non è quindi verificabile lato server: " +
+    "vale come misura di cortesia, non come limite opponibile. Un limite effettivo " +
+    "richiede autenticazione e un database con conteggio giornaliero.";
   panel.appendChild(n);
 
   const row = el("div", "btn-row");
@@ -264,16 +317,17 @@ function renderLimitScreen(usage) {
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
-function renderUnsupportedScreen(slug, info) {
+function renderUnsupportedScreen(info) {
   const view = $("#view");
   view.innerHTML = "";
   const panel = el("section", "panel");
   panel.appendChild(el("div", "panel__title", "Esame non ancora coperto dal motore"));
   panel.appendChild(el("div", "panel__desc",
-    `L'esame «${state.exam.name}» (${state.exam.ssd}) non dispone di template sufficienti.`));
+    `L'esame «${state.exam}» non dispone di aree sufficienti per generare una sessione completa.`));
+
   const n = el("div", "notice notice--warning");
   n.textContent =
-    `Template presenti: ${info.coverage ?? 0}. Minimo richiesto: ${info.minRequired ?? 3}. ` +
+    `Aree presenti: ${info.coverage ?? 0}. Minimo richiesto: ${info.minRequired ?? 4}. ` +
     `Il motore non genera domande inventate per riempire la sessione.`;
   panel.appendChild(n);
 
@@ -311,8 +365,8 @@ function renderQuestion() {
   const card = el("div", "question-card");
 
   const meta = el("div", "question-card__meta");
-  meta.appendChild(el("span", "badge badge--accent", q.topic));
-  meta.appendChild(el("span", "badge badge--info", `${s.total} domande · sessione standard`));
+  meta.appendChild(el("span", "badge badge--accent", q.areaName));
+  meta.appendChild(el("span", "badge badge--info", q.examName));
   card.appendChild(meta);
 
   card.appendChild(el("div", "question-card__prompt", q.prompt));
@@ -339,7 +393,6 @@ function renderQuestion() {
     opts.appendChild(btn);
   });
   card.appendChild(opts);
-
   main.appendChild(card);
 
   const row = el("div", "btn-row");
@@ -376,7 +429,6 @@ function renderQuestion() {
     }
   });
   row.appendChild(abort);
-
   main.appendChild(row);
   layout.appendChild(main);
 
@@ -389,7 +441,7 @@ function renderQuestion() {
     if (i === state.current) dot.dataset.state = "current";
     else if (state.answers[i] != null) dot.dataset.state = "answered";
     li.appendChild(dot);
-    li.appendChild(el("span", null, `Domanda ${i + 1}`));
+    li.appendChild(el("span", null, `Categoria ${i + 1}`));
     list.appendChild(li);
   });
   navPanel.appendChild(list);
@@ -399,11 +451,12 @@ function renderQuestion() {
   infoPanel.appendChild(el("div", "side-panel__title", "Sessione"));
   const kv = el("dl", "kv");
   for (const [k, v] of [
-    ["Esame", state.exam.name],
-    ["Corso", `${state.degree.name} (${state.degree.class})`],
-    ["Anno", `${state.year.year}° anno`],
-    ["Domande", String(s.total)],
-    ["Template usati", String(s.usedTemplates)]
+    ["Ateneo", state.university.name],
+    ["Facoltà", state.faculty.name],
+    ["Anno", `${state.year}° anno`],
+    ["Esame", state.exam],
+    ["Aree coperte", String(s.areaCount)],
+    ["Domande", String(s.total)]
   ]) {
     const r = el("div", "kv__row");
     r.appendChild(el("dt", null, k));
@@ -413,10 +466,19 @@ function renderQuestion() {
   infoPanel.appendChild(kv);
   side.appendChild(infoPanel);
 
+  if (s.repeatsDiscarded > 0) {
+    const rep = el("div", "side-panel");
+    rep.appendChild(el("div", "side-panel__title", "Controllo anti-ripetizione"));
+    rep.appendChild(el("div", "explanation",
+      `${s.repeatsDiscarded} estrazioni scartate perché riproponevano lo stesso schema ` +
+      `della domanda precedente o un testo già presente nella sessione.`));
+    side.appendChild(rep);
+  }
+
   const honesty = el("div", "side-panel");
   honesty.appendChild(el("div", "side-panel__title", "Nota sui contenuti"));
   honesty.appendChild(el("div", "explanation",
-    "Le domande sono generate da template parametrici su nozioni stabili della disciplina. " +
+    "Le domande sono generate da una factory parametrica su nozioni stabili della disciplina. " +
     "Non riproducono prove d'esame ufficiali né i programmi dei singoli atenei."));
   side.appendChild(honesty);
 
@@ -424,10 +486,10 @@ function renderQuestion() {
   view.appendChild(layout);
 }
 
+/* ------------------------- RISULTATI ---------------------- */
 function renderResults() {
   const view = $("#view");
-  const s = state.session;
-  const r = gradeSession(s, state.answers);
+  const r = gradeSession(state.session, state.answers);
 
   view.innerHTML = "";
 
@@ -444,26 +506,25 @@ function renderResults() {
   const text = el("div", "result-head__text");
   text.appendChild(el("h2", null, resultHeadline(pct)));
   text.appendChild(el("p", null,
-    `Esame: ${state.exam.name} — ${state.degree.name} (${state.degree.class}), ` +
-    `${state.year.year}° anno. Hai risposto correttamente a ${r.score} domande su ${r.total}.`));
+    `${state.exam} — ${state.faculty.name}, ${state.year}° anno. ` +
+    `Risposte corrette: ${r.score} su ${r.total}.`));
 
-  const topicBox = el("div", "exam-summary__meta");
-  topicBox.style.marginTop = "0.85rem";
-  for (const t of r.byTopic) {
-    topicBox.appendChild(el("span",
+  const areaBox = el("div", "exam-summary__meta");
+  areaBox.style.marginTop = "0.85rem";
+  for (const t of r.byArea) {
+    areaBox.appendChild(el("span",
       t.correct === t.total ? "badge badge--verified" : "badge badge--info",
-      `${t.topic}: ${t.correct}/${t.total}`));
+      `${t.area}: ${t.correct}/${t.total}`));
   }
-  text.appendChild(topicBox);
+  text.appendChild(areaBox);
   headInner.appendChild(text);
-
   head.appendChild(headInner);
   view.appendChild(head);
 
   const review = el("div", "panel");
   review.appendChild(el("div", "panel__title", "Revisione delle risposte"));
   review.appendChild(el("div", "panel__desc",
-    "Ogni voce riporta la risposta data, quella corretta e la spiegazione."));
+    "Ogni voce riporta la risposta data, quella corretta, la spiegazione e l'errore tipico evidenziato dai distrattori."));
 
   const list = el("div", "review");
   for (const d of r.detail) {
@@ -471,7 +532,7 @@ function renderResults() {
 
     const headRow = el("div", "review-item__head");
     headRow.appendChild(el("span", "review-item__num", `#${d.index}`));
-    headRow.appendChild(el("span", "badge badge--accent", d.topic));
+    headRow.appendChild(el("span", "badge badge--accent", d.area));
     headRow.appendChild(el("span",
       d.correct ? "badge badge--verified" : "badge badge--pending",
       d.correct ? "Corretta" : "Errata"));
@@ -491,10 +552,19 @@ function renderResults() {
       item.appendChild(right);
     }
 
-    const expl = el("div", "explanation");
-    expl.appendChild(el("strong", null, "Spiegazione: "));
-    expl.appendChild(document.createTextNode(d.explanation));
-    item.appendChild(expl);
+    if (d.explanation) {
+      const expl = el("div", "explanation");
+      expl.appendChild(el("strong", null, "Spiegazione: "));
+      expl.appendChild(document.createTextNode(d.explanation));
+      item.appendChild(expl);
+    }
+
+    if (d.errorNote) {
+      const err = el("div", "explanation");
+      err.appendChild(el("strong", null, "Errore tipico evidenziato: "));
+      err.appendChild(document.createTextNode(d.errorNote));
+      item.appendChild(err);
+    }
 
     list.appendChild(item);
   }
@@ -516,15 +586,11 @@ function renderResults() {
   home.type = "button";
   home.addEventListener("click", renderHome);
   row.appendChild(home);
-
   row.appendChild(el("div", "spacer"));
-
-  const left = Math.max(0, FREE_SESSIONS_PER_DAY - readUsage().count);
-  row.appendChild(el("span", "quiz-progress__label", `Sessioni gratuite rimaste oggi: ${left}`));
+  row.appendChild(el("span", "quiz-progress__label", `Sessioni gratuite rimaste oggi: ${sessionsLeft()}`));
 
   actions.appendChild(row);
   view.appendChild(actions);
-
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
@@ -535,6 +601,7 @@ function resultHeadline(pct) {
   return "Preparazione da consolidare";
 }
 
+/* -------------------------- VISTA HOME -------------------- */
 function renderHome() {
   const view = $("#view");
   view.innerHTML = "";
@@ -542,12 +609,13 @@ function renderHome() {
   const panel = el("section", "panel");
   panel.appendChild(el("div", "panel__title", "Seleziona il percorso d'esame"));
   panel.appendChild(el("div", "panel__desc",
-    "Scegli corso di laurea, anno di corso ed esame. La sessione generata contiene " +
-    `${QUESTIONS_PER_SESSION} domande a risposta multipla con correzione automatica.`));
+    "Scegli ateneo, facoltà, anno di corso ed esame. La sessione generata contiene " +
+    `${QUESTIONS_PER_SESSION} domande distribuite sulle aree del programma dell'esame.`));
 
   const grid = el("div", "selector-grid");
   for (const [id, label] of [
-    ["sel-degree", "Corso di laurea"],
+    ["sel-university", "Ateneo"],
+    ["sel-faculty", "Facoltà"],
     ["sel-year", "Anno di corso"],
     ["sel-exam", "Esame"]
   ]) {
@@ -570,12 +638,13 @@ function renderHome() {
   start.addEventListener("click", startSession);
   row.appendChild(start);
 
-  const reset = el("button", "btn btn--ghost", "Azzera contatore locale (debug)");
+  const reset = el("button", "btn btn--ghost", "Azzera contatore locale");
   reset.type = "button";
-  reset.title = "Strumento di sviluppo: il contatore reale sarà lato server";
+  reset.title = "Riporta a 7 il contatore delle sessioni gratuite di oggi";
   reset.addEventListener("click", () => {
     writeUsage({ date: todayKey(), count: 0 });
     renderSessionCounter();
+    renderExamSummary();
   });
   row.appendChild(reset);
 
@@ -584,11 +653,12 @@ function renderHome() {
 
   const summaryPanel = el("section", "panel");
   summaryPanel.appendChild(el("div", "panel__title", "Copertura del motore"));
-  summaryPanel.appendChild(el("div", "panel__desc", "Dati dichiarati in modo trasparente per l'esame selezionato."));
+  summaryPanel.appendChild(el("div", "panel__desc",
+    "Aree del programma coperte, numero di domande e varianti stimabili per l'esame selezionato."));
   const summary = el("div", "empty");
   summary.id = "exam-summary";
   summary.appendChild(el("p", "empty__title", "Nessun esame selezionato"));
-  summary.appendChild(el("p", null, "Completa i tre menu qui sopra per vedere la copertura del motore."));
+  summary.appendChild(el("p", null, "Completa i quattro menu qui sopra per vedere la copertura del motore."));
   summaryPanel.appendChild(summary);
   view.appendChild(summaryPanel);
 
@@ -596,6 +666,7 @@ function renderHome() {
   renderExamSummary();
 }
 
+/* --------------------- VISTA CATALOGO --------------------- */
 function renderCatalog() {
   const view = $("#view");
   view.innerHTML = "";
@@ -603,72 +674,77 @@ function renderCatalog() {
   const stats = catalogStats();
 
   const panel = el("section", "panel");
-  panel.appendChild(el("div", "panel__title", "Corsi di laurea"));
+  panel.appendChild(el("div", "panel__title", "Atenei"));
   panel.appendChild(el("div", "panel__desc",
-    "Catalogo organizzato per classi di laurea ministeriali (DM 270/2004). " +
-    "Nessuna università specifica: i corsi sono comuni a tutti gli atenei."));
+    `${UNIVERSITIES.length} atenei italiani raggruppati per area geografica. ` +
+    "Le facoltà e gli esami sono comuni a tutti gli atenei: la piattaforma non attribuisce " +
+    "a un singolo ateneo un piano di studi specifico."));
 
-  const wrap = el("div", "table-wrap");
-  const table = el("table");
-  const thead = el("thead");
-  const hr = el("tr");
-  for (const h of ["Corso di laurea", "Classe", "Area", "Anni", "Esami"]) {
-    hr.appendChild(el("th", null, h));
+  const byArea = universitiesByArea();
+  const list = el("div", "review");
+  for (const area of Object.keys(byArea)) {
+    const item = el("div", "review-item");
+    item.appendChild(el("div", "review-item__prompt", `${area} — ${byArea[area].length} atenei`));
+    const ul = el("ul", "dot-list");
+    ul.style.columns = "2";
+    ul.style.columnGap = "2.5rem";
+    for (const u of byArea[area]) {
+      const li = el("li");
+      li.appendChild(el("span", "dot"));
+      li.appendChild(el("span", null, u.name));
+      ul.appendChild(li);
+    }
+    item.appendChild(ul);
+    list.appendChild(item);
   }
-  thead.appendChild(hr);
-  table.appendChild(thead);
-
-  const tbody = el("tbody");
-  for (const d of DEGREES) {
-    const exams = d.years.reduce((a, y) => a + y.exams.length, 0);
-    const tr = el("tr");
-    tr.appendChild(el("td", null, d.name));
-    tr.appendChild(el("td", null, d.class));
-    tr.appendChild(el("td", null, d.area));
-    tr.appendChild(el("td", "num", String(d.years.length)));
-    tr.appendChild(el("td", "num", String(exams)));
-    tbody.appendChild(tr);
-  }
-  table.appendChild(tbody);
-  wrap.appendChild(table);
-  panel.appendChild(wrap);
-
-  const row = el("div", "btn-row");
-  row.appendChild(el("span", "quiz-progress__label",
-    `${stats.degrees} corsi · ${stats.years} anni di corso · ${stats.exams} esami`));
-  panel.appendChild(row);
+  panel.appendChild(list);
   view.appendChild(panel);
 
-  const detail = el("section", "panel");
-  detail.appendChild(el("div", "panel__title", "Esami e copertura del motore"));
-  detail.appendChild(el("div", "panel__desc",
-    "Per ogni esame è indicato il settore scientifico-disciplinare e se il motore dispone " +
-    "dei template necessari a generare una sessione completa."));
+  const dPanel = el("section", "panel");
+  dPanel.appendChild(el("div", "panel__title", "Facoltà ed esami"));
+  dPanel.appendChild(el("div", "panel__desc",
+    `${stats.faculties} facoltà su ${stats.years} anni di corso e ${stats.exams} esami complessivi, ` +
+    `pari a ${stats.uniqueExams} esami distinti. La colonna «Copertura» indica quanti esami ` +
+    "hanno già le aree necessarie per generare una sessione completa."));
 
-  const dList = el("div", "review");
-  for (const d of DEGREES) {
-    const item = el("div", "review-item");
-    item.appendChild(el("div", "review-item__prompt", `${d.name} — ${d.class}`));
-    for (const y of d.years) {
-      for (const e of y.exams) {
-        const cov = examCoverage(examSlug(e.id));
-        const line = el("div", "answer-line");
-        line.appendChild(el("span", "answer-line__tag", `${y.year}° anno`));
-        const text = el("span", "answer-line__text");
-        text.textContent = `${e.name} · ${e.ssd}`;
-        line.appendChild(text);
-        line.appendChild(el("span",
-          cov.available ? "badge badge--verified" : "badge badge--pending",
-          cov.available ? `${cov.templates} template` : "in preparazione"));
-        item.appendChild(line);
+  const table = el("div", "table-wrap");
+  const t = el("table");
+  const thead = el("thead");
+  const hr = el("tr");
+  for (const h of ["Facoltà", "Durata", "Anni", "Esami", "Copertura"]) hr.appendChild(el("th", null, h));
+  thead.appendChild(hr);
+  t.appendChild(thead);
+
+  const tbody = el("tbody");
+  for (const f of Object.values(FACULTIES_CATALOG)) {
+    const yearCount = Object.keys(f.years).length;
+    let examCount = 0;
+    let covered = 0;
+    for (const list of Object.values(f.years)) {
+      for (const name of list) {
+        examCount++;
+        if (examCoverage(examSlug(name)).available) covered++;
       }
     }
-    dList.appendChild(item);
+    const tr = el("tr");
+    tr.appendChild(el("td", null, f.name));
+    tr.appendChild(el("td", "num", `${f.duration} anni`));
+    tr.appendChild(el("td", "num", String(yearCount)));
+    tr.appendChild(el("td", "num", String(examCount)));
+    const td = el("td");
+    td.appendChild(el("span",
+      covered === examCount ? "badge badge--verified" : covered === 0 ? "badge badge--pending" : "badge badge--info",
+      `${covered}/${examCount}`));
+    tr.appendChild(td);
+    tbody.appendChild(tr);
   }
-  detail.appendChild(dList);
-  view.appendChild(detail);
+  t.appendChild(tbody);
+  table.appendChild(t);
+  dPanel.appendChild(table);
+  view.appendChild(dPanel);
 }
 
+/* ---------------------- NAVIGAZIONE ----------------------- */
 function setRoute(route) {
   for (const a of document.querySelectorAll(".header-nav a[data-route]")) {
     if (a.dataset.route === route) a.setAttribute("aria-current", "page");
@@ -696,4 +772,5 @@ function init() {
   setRoute("home");
 }
 
+// Avvio dell'applicazione all'interno della pagina
 document.addEventListener("DOMContentLoaded", init);
