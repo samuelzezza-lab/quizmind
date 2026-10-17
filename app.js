@@ -1,32 +1,45 @@
 /* ============================================================
    Quizmind — Logica applicativa
    ------------------------------------------------------------
-   Percorso: ateneo -> facoltà -> anno di corso -> esame ->
-   sessione da 10 domande -> correzione -> revisione.
+   Due percorsi:
 
-   Il motore genera le domande attraverso la factory a tre step
-   (quiz/engine.js): sottocategorie obbligatorie, finestra mobile
-   anti-ripetizione e distrattori dinamici.
+     Università       ateneo -> facoltà -> anno -> esame
+     Scuola Superiore indirizzo -> anno -> materia
+
+   Entrambi generano una sessione da 10 domande con correzione
+   automatica, punteggio e revisione.
    ============================================================ */
 
 import { UNIVERSITIES, universitiesByArea, findUniversity } from "./data/universities.js";
 import { FACULTIES_CATALOG, examSlug, catalogStats } from "./data/faculties.js";
+import { SCHOOL_TRACKS, subjectSlug, schoolStats } from "./data/schools.js";
 import {
   examCoverage,
   generateSession,
   gradeSession,
   variantEstimate,
-  QUESTIONS_PER_SESSION
+  QUESTIONS_PER_SESSION as UNI_QUESTIONS
 } from "./quiz/engine.js";
+import {
+  subjectCoverage,
+  generateSchoolSession,
+  gradeSchoolSession,
+  schoolVariantEstimate,
+  QUESTIONS_PER_SESSION as SCHOOL_QUESTIONS
+} from "./quiz/school-engine.js";
 
 /* ------------------------- STATO -------------------------- */
 const state = {
+  mode: "universita",
   university: null,
-  facultyId: null,
   faculty: null,
   year: null,
   exam: null,
+  track: null,
+  schoolYear: null,
+  subject: null,
   session: null,
+  sessionMode: null,
   answers: [],
   current: 0,
   graded: false
@@ -48,8 +61,6 @@ function el(tag, className, text) {
 const LETTERS = ["A", "B", "C", "D"];
 
 /* --------------------- CONTATORE SESSIONI ----------------- */
-/* Il conteggio vive nel browser: vale come misura di cortesia,
-   non come limite opponibile. L'interfaccia lo dichiara. */
 function todayKey() {
   const d = new Date();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -80,11 +91,10 @@ function sessionsLeft() {
 function renderSessionCounter() {
   const node = $("#session-counter");
   if (!node) return;
-  const left = sessionsLeft();
-  node.innerHTML = `Sessioni gratuite oggi: <strong>${left} / ${FREE_SESSIONS_PER_DAY}</strong>`;
+  node.innerHTML = `Sessioni gratuite oggi: <strong>${sessionsLeft()} / ${FREE_SESSIONS_PER_DAY}</strong>`;
 }
 
-/* --------------------- SELEZIONE PERCORSO ----------------- */
+/* --------------------- UTILITÀ SELECT --------------------- */
 function fillSelect(select, items, placeholder) {
   select.innerHTML = "";
   const ph = el("option", null, placeholder);
@@ -116,14 +126,16 @@ function fillGroupedSelect(select, groups, placeholder) {
   select.disabled = groups.length === 0;
 }
 
-/* Facoltà del catalogo, in ordine alfabetico. */
 function facultyItems() {
   return Object.entries(FACULTIES_CATALOG)
     .map(([id, f]) => ({ value: id, label: `${f.name} — ${f.duration} anni`, name: f.name }))
     .sort((a, b) => a.name.localeCompare(b.name, "it"));
 }
 
-function initSelectors() {
+/* ============================================================
+   SELEZIONE UNIVERSITÀ
+   ============================================================ */
+function initUniversitySelectors() {
   const uniSel = $("#sel-university");
   const facSel = $("#sel-faculty");
   const yearSel = $("#sel-year");
@@ -152,116 +164,251 @@ function initSelectors() {
     );
     fillSelect(yearSel, [], "Seleziona prima la facoltà");
     fillSelect(examSel, [], "Seleziona prima l'anno");
-    state.faculty = state.facultyId = state.year = state.exam = null;
-    renderExamSummary();
+    state.faculty = state.year = state.exam = null;
+    renderSummary();
   });
 
   facSel.addEventListener("change", () => {
     const f = FACULTIES_CATALOG[facSel.value] || null;
     state.faculty = f;
-    state.facultyId = facSel.value || null;
     const years = f ? Object.keys(f.years).map(Number).sort((a, b) => a - b) : [];
-    fillSelect(
-      yearSel,
-      years.map(y => ({ value: String(y), label: `${y}° anno` })),
-      "Seleziona l'anno di corso"
-    );
+    fillSelect(yearSel, years.map(y => ({ value: String(y), label: `${y}° anno` })), "Seleziona l'anno di corso");
     fillSelect(examSel, [], "Seleziona prima l'anno");
     state.year = state.exam = null;
-    renderExamSummary();
+    renderSummary();
   });
 
   yearSel.addEventListener("change", () => {
     const list = state.faculty ? state.faculty.years[yearSel.value] : null;
     state.year = yearSel.value || null;
-    fillSelect(
-      examSel,
-      list ? list.map(name => ({ value: name, label: name })) : [],
-      "Seleziona l'esame"
-    );
+    fillSelect(examSel, list ? list.map(name => ({ value: name, label: name })) : [], "Seleziona l'esame");
     state.exam = null;
-    renderExamSummary();
+    renderSummary();
   });
 
   examSel.addEventListener("change", () => {
     state.exam = examSel.value || null;
-    renderExamSummary();
+    renderSummary();
   });
 }
 
-/* ---------------------- RIEPILOGO ESAME ------------------- */
-function renderExamSummary() {
+/* ============================================================
+   SELEZIONE SCUOLA SUPERIORE
+   ============================================================ */
+function initSchoolSelectors() {
+  const trackSel = $("#sel-track");
+  const yearSel = $("#sel-syear");
+  const subjSel = $("#sel-subject");
+
+  const byKind = {};
+  for (const t of SCHOOL_TRACKS) {
+    if (!byKind[t.kind]) byKind[t.kind] = [];
+    byKind[t.kind].push(t);
+  }
+
+  fillGroupedSelect(
+    trackSel,
+    Object.keys(byKind).map(kind => ({
+      label: kind,
+      items: byKind[kind]
+        .map(t => ({ value: t.id, label: t.name }))
+        .sort((a, b) => a.label.localeCompare(b.label, "it"))
+    })),
+    "Seleziona l'indirizzo"
+  );
+
+  fillSelect(yearSel, [], "Seleziona prima l'indirizzo");
+  fillSelect(subjSel, [], "Seleziona prima l'anno");
+
+  trackSel.addEventListener("change", () => {
+    state.track = SCHOOL_TRACKS.find(t => t.id === trackSel.value) || null;
+    const years = state.track ? Object.keys(state.track.subjects).map(Number).sort((a, b) => a - b) : [];
+    fillSelect(
+      yearSel,
+      years.map(y => ({ value: String(y), label: `${y}ª superiore` })),
+      "Seleziona l'anno scolastico"
+    );
+    fillSelect(subjSel, [], "Seleziona prima l'anno");
+    state.schoolYear = state.subject = null;
+    renderSummary();
+  });
+
+  yearSel.addEventListener("change", () => {
+    const y = yearSel.value;
+    state.schoolYear = y || null;
+
+    const names = state.track && y ? state.track.subjects[y] || [] : [];
+    const items = names.map(name => {
+      const slug = subjectSlug(name);
+      const cov = subjectCoverage(slug, Number(y));
+      return {
+        value: slug,
+        label: cov.available ? name : `${name} — in preparazione`
+      };
+    });
+
+    subjSel.innerHTML = "";
+    const ph = el("option", null, "Seleziona la materia");
+    ph.value = "";
+    subjSel.appendChild(ph);
+    for (const it of items) {
+      const o = el("option", null, it.label);
+      o.value = it.value;
+      subjSel.appendChild(o);
+    }
+    subjSel.disabled = items.length === 0;
+
+    state.subject = null;
+    renderSummary();
+  });
+
+  subjSel.addEventListener("change", () => {
+    state.subject = subjSel.value || null;
+    renderSummary();
+  });
+}
+
+/* ============================================================
+   RIEPILOGO
+   ============================================================ */
+function emptySummary(box, title, text) {
+  box.className = "empty";
+  box.appendChild(el("p", "empty__title", title));
+  box.appendChild(el("p", null, text));
+}
+
+function noticeWarn(text) {
+  const n = el("div", "notice notice--warning");
+  n.textContent = text;
+  return n;
+}
+
+function coverageBlock(pairs) {
+  const wrap = el("div", "coverage");
+  for (const [value, label] of pairs) {
+    const item = el("div", "coverage__item");
+    item.appendChild(el("div", "coverage__value num", value));
+    item.appendChild(el("div", "coverage__label", label));
+    wrap.appendChild(item);
+  }
+  return wrap;
+}
+
+function renderSummary() {
   const box = $("#exam-summary");
   if (!box) return;
   box.innerHTML = "";
-
   const startBtn = $("#btn-start");
 
-  if (!state.exam) {
-    box.className = "empty";
-    box.appendChild(el("p", "empty__title", "Nessun esame selezionato"));
-    box.appendChild(el("p", null, "Completa i quattro menu qui sopra per vedere la copertura del motore."));
+  /* ---- modalità Università ---- */
+  if (state.mode === "universita") {
+    if (!state.exam) {
+      emptySummary(box, "Nessun esame selezionato",
+        "Completa i quattro menu qui sopra per vedere la copertura del motore.");
+      if (startBtn) startBtn.disabled = true;
+      return;
+    }
+
+    const slug = examSlug(state.exam);
+    const cov = examCoverage(slug);
+    const variants = variantEstimate(slug);
+    box.className = "";
+
+    const wrapEl = el("div", "exam-summary");
+    const left = el("div");
+    left.appendChild(el("div", "exam-summary__path",
+      `${state.university.name} · ${state.faculty.name} · ${state.year}° anno`));
+    left.appendChild(el("div", "exam-summary__name", state.exam));
+
+    const meta = el("div", "exam-summary__meta");
+    meta.appendChild(el("span", "badge badge--info", `${state.faculty.duration} anni di corso`));
+    meta.appendChild(el("span",
+      cov.available ? "badge badge--verified" : "badge badge--pending",
+      cov.available ? "Motore pronto" : "Motore in preparazione"));
+    left.appendChild(meta);
+
+    const right = el("div");
+    right.appendChild(coverageBlock([
+      [String(cov.templates), "Aree del programma"],
+      [String(UNI_QUESTIONS), "Domande a sessione"],
+      [variants ? variants.toLocaleString("it-IT") : "—", "Varianti stimate"]
+    ]));
+
+    if (cov.available) {
+      const tags = el("div", "exam-summary__meta");
+      tags.style.marginTop = "0.6rem";
+      for (const a of cov.areas) tags.appendChild(el("span", "badge badge--info", a.name));
+      right.appendChild(tags);
+    } else {
+      right.appendChild(noticeWarn(
+        `Questo esame dispone di ${cov.templates} aree su ${cov.minRequired} necessarie. ` +
+        `Il motore non genera la sessione invece di riproporre le stesse domande.`));
+    }
+
+    wrapEl.appendChild(left);
+    wrapEl.appendChild(right);
+    box.appendChild(wrapEl);
+    if (startBtn) startBtn.disabled = !cov.available;
+    return;
+  }
+
+  /* ---- modalità Scuola Superiore ---- */
+  if (!state.subject) {
+    emptySummary(box, "Nessuna materia selezionata",
+      "Scegli indirizzo, anno scolastico e materia.");
     if (startBtn) startBtn.disabled = true;
     return;
   }
 
-  const slug = examSlug(state.exam);
-  const cov = examCoverage(slug);
-  const variants = variantEstimate(slug);
+  const year = Number(state.schoolYear);
+  const cov = subjectCoverage(state.subject, year);
+  const variants = schoolVariantEstimate(state.subject, year);
   box.className = "";
 
   const wrapEl = el("div", "exam-summary");
   const left = el("div");
-
   left.appendChild(el("div", "exam-summary__path",
-    `${state.university.name} · ${state.faculty.name} · ${state.year}° anno`));
-  left.appendChild(el("div", "exam-summary__name", state.exam));
+    `${state.track.name} · ${year}ª superiore`));
+  left.appendChild(el("div", "exam-summary__name", cov.subjectName));
 
   const meta = el("div", "exam-summary__meta");
-  meta.appendChild(el("span", "badge badge--info", `${state.faculty.duration} anni di corso`));
+  meta.appendChild(el("span", "badge badge--info", "Percorso scuola superiore"));
   meta.appendChild(el("span",
     cov.available ? "badge badge--verified" : "badge badge--pending",
     cov.available ? "Motore pronto" : "Motore in preparazione"));
   left.appendChild(meta);
 
   const right = el("div");
-  const covWrap = el("div", "coverage");
-  for (const [value, label] of [
-    [String(cov.templates), "Aree del programma"],
-    [String(QUESTIONS_PER_SESSION), "Domande a sessione"],
+  right.appendChild(coverageBlock([
+    [String(cov.areas), "Aree della materia"],
+    [String(SCHOOL_QUESTIONS), "Domande a sessione"],
     [variants ? variants.toLocaleString("it-IT") : "—", "Varianti stimate"]
-  ]) {
-    const item = el("div", "coverage__item");
-    item.appendChild(el("div", "coverage__value num", value));
-    item.appendChild(el("div", "coverage__label", label));
-    covWrap.appendChild(item);
-  }
-  right.appendChild(covWrap);
+  ]));
 
   if (cov.available) {
     const tags = el("div", "exam-summary__meta");
     tags.style.marginTop = "0.6rem";
-    for (const a of cov.areas) tags.appendChild(el("span", "badge badge--info", a.name));
+    for (const a of cov.list) tags.appendChild(el("span", "badge badge--info", a.name));
     right.appendChild(tags);
   } else {
-    const n = el("div", "notice notice--warning");
-    n.textContent =
-      `Questo esame dispone di ${cov.templates} aree su ${cov.minRequired} necessarie. ` +
-      `Il motore non genera la sessione invece di riproporre le stesse domande: ` +
-      `le aree vanno aggiunte in quiz/engine.js.`;
-    right.appendChild(n);
+    right.appendChild(noticeWarn(
+      `Questa materia, per la classe ${year}ª, dispone di ${cov.areas} aree su ${cov.minRequired} necessarie. ` +
+      `Il motore non genera la sessione: le aree vanno aggiunte in quiz/school-areas-a.js o school-areas-b.js.`));
   }
 
   wrapEl.appendChild(left);
   wrapEl.appendChild(right);
   box.appendChild(wrapEl);
-
   if (startBtn) startBtn.disabled = !cov.available;
 }
 
-/* --------------------------- QUIZ ------------------------- */
+/* ============================================================
+   AVVIO SESSIONE
+   ============================================================ */
 function startSession() {
-  if (!state.exam) return;
+  const isUni = state.mode === "universita";
+  if (isUni && !state.exam) return;
+  if (!isUni && !state.subject) return;
 
   const usage = readUsage();
   if (usage.count >= FREE_SESSIONS_PER_DAY) {
@@ -269,9 +416,10 @@ function startSession() {
     return;
   }
 
-  const slug = examSlug(state.exam);
   const seed = (Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0;
-  const session = generateSession(slug, seed);
+  const session = isUni
+    ? generateSession(examSlug(state.exam), seed)
+    : generateSchoolSession(state.subject, Number(state.schoolYear), seed);
 
   if (!session.ok) {
     renderUnsupportedScreen(session);
@@ -279,14 +427,13 @@ function startSession() {
   }
 
   state.session = session;
+  state.sessionMode = isUni ? "universita" : "scuola";
   state.answers = new Array(session.total).fill(null);
   state.current = 0;
   state.graded = false;
 
-  usage.count += 1;
-  writeUsage({ date: todayKey(), count: usage.count });
+  writeUsage({ date: todayKey(), count: usage.count + 1 });
   renderSessionCounter();
-
   renderQuestion();
 }
 
@@ -299,12 +446,12 @@ function renderLimitScreen(usage) {
     `Hai utilizzato ${usage.count} sessioni oggi. Il limite di ${FREE_SESSIONS_PER_DAY} ` +
     `sessioni gratuite si azzera a mezzanotte, ora locale.`));
 
-  const n = el("div", "notice notice--warning");
-  n.textContent =
-    "Il conteggio è memorizzato nel browser e non è quindi verificabile lato server: " +
-    "vale come misura di cortesia, non come limite opponibile. Un limite effettivo " +
-    "richiede autenticazione e un database con conteggio giornaliero.";
-  panel.appendChild(n);
+  const sim = el("div", "notice notice--info");
+  sim.textContent =
+    "Il conteggio è memorizzato nel browser: vale come misura di cortesia, non come limite " +
+    "opponibile. Un limite effettivo richiede autenticazione e un database con conteggio " +
+    "giornaliero lato server.";
+  panel.appendChild(sim);
 
   const row = el("div", "btn-row");
   const home = el("button", "btn btn--ghost", "Torna alla selezione");
@@ -312,7 +459,6 @@ function renderLimitScreen(usage) {
   home.addEventListener("click", renderHome);
   row.appendChild(home);
   panel.appendChild(row);
-
   view.appendChild(panel);
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
@@ -321,15 +467,15 @@ function renderUnsupportedScreen(info) {
   const view = $("#view");
   view.innerHTML = "";
   const panel = el("section", "panel");
-  panel.appendChild(el("div", "panel__title", "Esame non ancora coperto dal motore"));
+  panel.appendChild(el("div", "panel__title", "Contenuto non ancora coperto dal motore"));
   panel.appendChild(el("div", "panel__desc",
-    `L'esame «${state.exam}» non dispone di aree sufficienti per generare una sessione completa.`));
+    state.sessionMode === "scuola" || state.mode === "scuola"
+      ? "La materia selezionata non dispone di aree sufficienti per la classe scelta."
+      : `L'esame «${state.exam}» non dispone di aree sufficienti per generare una sessione completa.`));
 
-  const n = el("div", "notice notice--warning");
-  n.textContent =
+  panel.appendChild(noticeWarn(
     `Aree presenti: ${info.coverage ?? 0}. Minimo richiesto: ${info.minRequired ?? 4}. ` +
-    `Il motore non genera domande inventate per riempire la sessione.`;
-  panel.appendChild(n);
+    `Il motore non genera domande inventate per riempire la sessione.`));
 
   const row = el("div", "btn-row");
   const home = el("button", "btn btn--ghost", "Torna alla selezione");
@@ -337,11 +483,13 @@ function renderUnsupportedScreen(info) {
   home.addEventListener("click", renderHome);
   row.appendChild(home);
   panel.appendChild(row);
-
   view.appendChild(panel);
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
+/* ============================================================
+   QUIZ
+   ============================================================ */
 function renderQuestion() {
   const view = $("#view");
   const s = state.session;
@@ -366,7 +514,10 @@ function renderQuestion() {
 
   const meta = el("div", "question-card__meta");
   meta.appendChild(el("span", "badge badge--accent", q.areaName));
-  meta.appendChild(el("span", "badge badge--info", q.examName));
+  meta.appendChild(el("span", "badge badge--info",
+    state.sessionMode === "universita"
+      ? q.examName
+      : `${q.subjectName} · ${q.year}ª superiore`));
   card.appendChild(meta);
 
   card.appendChild(el("div", "question-card__prompt", q.prompt));
@@ -450,14 +601,25 @@ function renderQuestion() {
   const infoPanel = el("div", "side-panel");
   infoPanel.appendChild(el("div", "side-panel__title", "Sessione"));
   const kv = el("dl", "kv");
-  for (const [k, v] of [
-    ["Ateneo", state.university.name],
-    ["Facoltà", state.faculty.name],
-    ["Anno", `${state.year}° anno`],
-    ["Esame", state.exam],
-    ["Aree coperte", String(s.areaCount)],
-    ["Domande", String(s.total)]
-  ]) {
+  const rows = state.sessionMode === "universita"
+    ? [
+        ["Percorso", "Università"],
+        ["Ateneo", state.university.name],
+        ["Facoltà", state.faculty.name],
+        ["Anno", `${state.year}° anno`],
+        ["Esame", state.exam],
+        ["Aree coperte", String(s.areaCount)],
+        ["Domande", String(s.total)]
+      ]
+    : [
+        ["Percorso", "Scuola Superiore"],
+        ["Indirizzo", state.track.name],
+        ["Classe", `${s.year}ª superiore`],
+        ["Materia", s.subjectName],
+        ["Aree coperte", String(s.areaCount)],
+        ["Domande", String(s.total)]
+      ];
+  for (const [k, v] of rows) {
     const r = el("div", "kv__row");
     r.appendChild(el("dt", null, k));
     r.appendChild(el("dd", null, v));
@@ -479,17 +641,69 @@ function renderQuestion() {
   honesty.appendChild(el("div", "side-panel__title", "Nota sui contenuti"));
   honesty.appendChild(el("div", "explanation",
     "Le domande sono generate da una factory parametrica su nozioni stabili della disciplina. " +
-    "Non riproducono prove d'esame ufficiali né i programmi dei singoli atenei."));
+    "Non riproducono prove d'esame ufficiali né i programmi dei singoli istituti o atenei."));
   side.appendChild(honesty);
 
   layout.appendChild(side);
   view.appendChild(layout);
 }
 
-/* ------------------------- RISULTATI ---------------------- */
+/* ============================================================
+   RISULTATI
+   ============================================================ */
+function resultHeadline(pct) {
+  if (pct >= 90) return "Preparazione solida";
+  if (pct >= 70) return "Buon livello di preparazione";
+  if (pct >= 50) return "Preparazione parziale";
+  return "Preparazione da consolidare";
+}
+
+/* Blocco delle funzioni avanzate. Non sono attive e il pulsante
+   non effettua alcun pagamento: lo dichiara in interfaccia. */
+function premiumPanel() {
+  const panel = el("section", "panel");
+
+  const title = el("div", "panel__title", "Funzioni avanzate");
+  title.appendChild(el("span", "badge badge--pending", "non attive"));
+  panel.appendChild(title);
+
+  panel.appendChild(el("div", "panel__desc",
+    "Queste funzioni richiedono un backend e un pagamento verificato lato server. " +
+    "I pulsanti non effettuano alcun addebito e non attivano nulla."));
+
+  const grid = el("div", "selector-grid");
+
+  const f1 = el("div", "field");
+  f1.appendChild(el("div", "exam-summary__name", "Esame a risposta aperta"));
+  f1.appendChild(el("div", "explanation",
+    "15 domande con risposta scritta. La correzione di un testo libero richiede un modello " +
+    "linguistico lato server: senza backend la valutazione non può essere reale."));
+  const b1 = el("button", "btn btn--ghost", "Richiede backend e pagamenti");
+  b1.type = "button";
+  b1.disabled = true;
+  f1.appendChild(b1);
+  grid.appendChild(f1);
+
+  const f2 = el("div", "field");
+  f2.appendChild(el("div", "exam-summary__name", "Mappe concettuali e riassunti"));
+  f2.appendChild(el("div", "explanation",
+    "La struttura delle mappe può essere costruita dalle aree del programma già note al motore. " +
+    "I riassunti discorsivi richiedono invece un modello linguistico."));
+  const b2 = el("button", "btn btn--ghost", "Richiede backend e pagamenti");
+  b2.type = "button";
+  b2.disabled = true;
+  f2.appendChild(b2);
+  grid.appendChild(f2);
+
+  panel.appendChild(grid);
+  return panel;
+}
+
 function renderResults() {
   const view = $("#view");
-  const r = gradeSession(state.session, state.answers);
+  const r = (state.sessionMode === "universita"
+    ? gradeSession(state.session, state.answers)
+    : gradeSchoolSession(state.session, state.answers));
 
   view.innerHTML = "";
 
@@ -505,9 +719,11 @@ function renderResults() {
 
   const text = el("div", "result-head__text");
   text.appendChild(el("h2", null, resultHeadline(pct)));
+  const label = state.sessionMode === "universita"
+    ? `${state.exam} — ${state.faculty.name}, ${state.year}° anno`
+    : `${state.session.subjectName} — ${state.track.name}, ${state.session.year}ª superiore`;
   text.appendChild(el("p", null,
-    `${state.exam} — ${state.faculty.name}, ${state.year}° anno. ` +
-    `Risposte corrette: ${r.score} su ${r.total}.`));
+    `${label}. Risposte corrette: ${r.score} su ${r.total}.`));
 
   const areaBox = el("div", "exam-summary__meta");
   areaBox.style.marginTop = "0.85rem";
@@ -571,6 +787,8 @@ function renderResults() {
   review.appendChild(list);
   view.appendChild(review);
 
+  view.appendChild(premiumPanel());
+
   const actions = el("div", "panel");
   const row = el("div", "btn-row");
   row.style.marginTop = "0";
@@ -594,31 +812,55 @@ function renderResults() {
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
-function resultHeadline(pct) {
-  if (pct >= 90) return "Preparazione solida";
-  if (pct >= 70) return "Buon livello di preparazione";
-  if (pct >= 50) return "Preparazione parziale";
-  return "Preparazione da consolidare";
-}
-
-/* -------------------------- VISTA HOME -------------------- */
+/* ============================================================
+   VISTA HOME
+   ============================================================ */
 function renderHome() {
   const view = $("#view");
   view.innerHTML = "";
 
+  /* --- selettore del percorso --- */
+  const modePanel = el("section", "panel");
+  modePanel.appendChild(el("div", "panel__title", "Percorso di studio"));
+
+  const modeRow = el("div", "btn-row");
+  modeRow.style.marginTop = "0";
+  modeRow.style.paddingTop = "0";
+  modeRow.style.borderTop = "none";
+
+  for (const pair of [["universita", "Università"], ["scuola", "Scuola Superiore"]]) {
+    const key = pair[0], label = pair[1];
+    const b = el("button", key === state.mode ? "btn btn--primary" : "btn btn--ghost", label);
+    b.type = "button";
+    b.addEventListener("click", () => {
+      state.mode = key;
+      state.session = null;
+      renderHome();
+    });
+    modeRow.appendChild(b);
+  }
+  modePanel.appendChild(modeRow);
+  view.appendChild(modePanel);
+
+  /* --- selettori --- */
   const panel = el("section", "panel");
   panel.appendChild(el("div", "panel__title", "Seleziona il percorso d'esame"));
+
+  const count = state.mode === "universita" ? UNI_QUESTIONS : SCHOOL_QUESTIONS;
   panel.appendChild(el("div", "panel__desc",
-    "Scegli ateneo, facoltà, anno di corso ed esame. La sessione generata contiene " +
-    `${QUESTIONS_PER_SESSION} domande distribuite sulle aree del programma dell'esame.`));
+    state.mode === "universita"
+      ? "Scegli ateneo, facoltà, anno di corso ed esame. La sessione contiene " +
+        `${count} domande distribuite sulle aree del programma dell'esame.`
+      : "Scegli indirizzo, anno scolastico e materia. La sessione contiene " +
+        `${count} domande, con difficoltà commisurata all'anno frequentato.`));
 
   const grid = el("div", "selector-grid");
-  for (const [id, label] of [
-    ["sel-university", "Ateneo"],
-    ["sel-faculty", "Facoltà"],
-    ["sel-year", "Anno di corso"],
-    ["sel-exam", "Esame"]
-  ]) {
+  const fields = state.mode === "universita"
+    ? [["sel-university", "Ateneo"], ["sel-faculty", "Facoltà"], ["sel-year", "Anno di corso"], ["sel-exam", "Esame"]]
+    : [["sel-track", "Indirizzo"], ["sel-syear", "Anno scolastico"], ["sel-subject", "Materia"]];
+
+  for (const pair of fields) {
+    const id = pair[0], label = pair[1];
     const f = el("div", "field");
     const lb = el("label", null, label);
     lb.setAttribute("for", id);
@@ -631,7 +873,7 @@ function renderHome() {
   panel.appendChild(grid);
 
   const row = el("div", "btn-row");
-  const start = el("button", "btn btn--primary", `Avvia la sessione da ${QUESTIONS_PER_SESSION} domande`);
+  const start = el("button", "btn btn--primary", `Avvia la sessione da ${count} domande`);
   start.id = "btn-start";
   start.type = "button";
   start.disabled = true;
@@ -644,44 +886,51 @@ function renderHome() {
   reset.addEventListener("click", () => {
     writeUsage({ date: todayKey(), count: 0 });
     renderSessionCounter();
-    renderExamSummary();
+    renderSummary();
   });
   row.appendChild(reset);
 
   panel.appendChild(row);
   view.appendChild(panel);
 
+  /* --- riepilogo --- */
   const summaryPanel = el("section", "panel");
   summaryPanel.appendChild(el("div", "panel__title", "Copertura del motore"));
   summaryPanel.appendChild(el("div", "panel__desc",
-    "Aree del programma coperte, numero di domande e varianti stimabili per l'esame selezionato."));
+    "Aree del programma coperte, numero di domande e varianti stimabili per la selezione fatta."));
   const summary = el("div", "empty");
   summary.id = "exam-summary";
-  summary.appendChild(el("p", "empty__title", "Nessun esame selezionato"));
-  summary.appendChild(el("p", null, "Completa i quattro menu qui sopra per vedere la copertura del motore."));
+  summary.appendChild(el("p", "empty__title", "Nessuna selezione"));
+  summary.appendChild(el("p", null, "Completa i menu qui sopra per vedere la copertura del motore."));
   summaryPanel.appendChild(summary);
   view.appendChild(summaryPanel);
 
-  initSelectors();
-  renderExamSummary();
+  if (state.mode === "universita") initUniversitySelectors();
+  else initSchoolSelectors();
+
+  renderSummary();
 }
 
-/* --------------------- VISTA CATALOGO --------------------- */
+/* ============================================================
+   VISTA CATALOGO
+   ============================================================ */
 function renderCatalog() {
   const view = $("#view");
   view.innerHTML = "";
 
   const stats = catalogStats();
+  const sstats = schoolStats();
 
+  /* --- università --- */
   const panel = el("section", "panel");
-  panel.appendChild(el("div", "panel__title", "Atenei"));
+  panel.appendChild(el("div", "panel__title", "Università"));
   panel.appendChild(el("div", "panel__desc",
     `${UNIVERSITIES.length} atenei italiani raggruppati per area geografica. ` +
     "Le facoltà e gli esami sono comuni a tutti gli atenei: la piattaforma non attribuisce " +
     "a un singolo ateneo un piano di studi specifico."));
 
-  const byArea = universitiesByArea();
   const list = el("div", "review");
+  const byArea = universitiesByArea();
   for (const area of Object.keys(byArea)) {
     const item = el("div", "review-item");
     item.appendChild(el("div", "review-item__prompt", `${area} — ${byArea[area].length} atenei`));
@@ -700,8 +949,9 @@ function renderCatalog() {
   panel.appendChild(list);
   view.appendChild(panel);
 
+  /* --- facoltà universitarie --- */
   const dPanel = el("section", "panel");
-  dPanel.appendChild(el("div", "panel__title", "Facoltà ed esami"));
+  dPanel.appendChild(el("div", "panel__title", "Facoltà universitarie ed esami"));
   dPanel.appendChild(el("div", "panel__desc",
     `${stats.faculties} facoltà su ${stats.years} anni di corso e ${stats.exams} esami complessivi, ` +
     `pari a ${stats.uniqueExams} esami distinti. La colonna «Copertura» indica quanti esami ` +
@@ -718,10 +968,9 @@ function renderCatalog() {
   const tbody = el("tbody");
   for (const f of Object.values(FACULTIES_CATALOG)) {
     const yearCount = Object.keys(f.years).length;
-    let examCount = 0;
-    let covered = 0;
-    for (const list of Object.values(f.years)) {
-      for (const name of list) {
+    let examCount = 0, covered = 0;
+    for (const l of Object.values(f.years)) {
+      for (const name of l) {
         examCount++;
         if (examCoverage(examSlug(name)).available) covered++;
       }
@@ -742,9 +991,51 @@ function renderCatalog() {
   table.appendChild(t);
   dPanel.appendChild(table);
   view.appendChild(dPanel);
+
+  /* --- scuola superiore --- */
+  const sPanel = el("section", "panel");
+  sPanel.appendChild(el("div", "panel__title", "Scuola Superiore"));
+  sPanel.appendChild(el("div", "panel__desc",
+    `${sstats.tracks} indirizzi (${sstats.licei} licei e ${sstats.istituti} istituti tecnici o professionali), ` +
+    `${sstats.combinations} combinazioni materia-anno e ${sstats.distinctSubjects} materie distinte. ` +
+    "Il motore copre per ora un nucleo di materie; le altre sono elencate come in preparazione."));
+
+  const sWrap = el("div", "table-wrap");
+  const st = el("table");
+  const sth = el("thead");
+  const shr = el("tr");
+  for (const h of ["Indirizzo", "Tipo", "Anni", "Aree coperte per classe"]) shr.appendChild(el("th", null, h));
+  sth.appendChild(shr);
+  st.appendChild(sth);
+
+  const stb = el("tbody");
+  for (const track of SCHOOL_TRACKS) {
+    const tr = el("tr");
+    tr.appendChild(el("td", null, track.name));
+    tr.appendChild(el("td", null, track.kind));
+    tr.appendChild(el("td", "num", String(track.years)));
+
+    const covTd = el("td");
+    const perYear = [];
+    for (const y of Object.keys(track.subjects).map(Number).sort((a, b) => a - b)) {
+      const names = track.subjects[y];
+      let covered = 0;
+      for (const n of names) if (subjectCoverage(subjectSlug(n), y).available) covered++;
+      perYear.push(`${y}ª: ${covered}/${names.length}`);
+    }
+    covTd.appendChild(el("span", "badge badge--info", perYear.join("  ·  ")));
+    tr.appendChild(covTd);
+    stb.appendChild(tr);
+  }
+  st.appendChild(stb);
+  sWrap.appendChild(st);
+  sPanel.appendChild(sWrap);
+  view.appendChild(sPanel);
 }
 
-/* ---------------------- NAVIGAZIONE ----------------------- */
+/* ============================================================
+   NAVIGAZIONE
+   ============================================================ */
 function setRoute(route) {
   for (const a of document.querySelectorAll(".header-nav a[data-route]")) {
     if (a.dataset.route === route) a.setAttribute("aria-current", "page");
@@ -772,5 +1063,4 @@ function init() {
   setRoute("home");
 }
 
-// Avvio dell'applicazione all'interno della pagina
 document.addEventListener("DOMContentLoaded", init);
